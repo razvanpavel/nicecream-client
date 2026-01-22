@@ -102,10 +102,22 @@ export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
         onPress={handlePlayPause}
         disabled={isLoading}
         style={({ pressed }) => ({
-          backgroundColor: pressed ? adjustColor(stream.color, -20) : stream.color,
-          opacity: isLoading ? 0.7 : 1,
+          width: 96,
+          height: 96,
+          borderRadius: 48,
+          backgroundColor: isLoading
+            ? adjustColor(stream.color, 30) // Lighter when loading
+            : pressed
+              ? adjustColor(stream.color, -30) // Darker when pressed
+              : stream.color, // Normal color
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 5,
         })}
-        className="h-24 w-24 items-center justify-center rounded-full shadow-lg"
       >
         {isLoading ? (
           <ActivityIndicator size="large" color="white" />
