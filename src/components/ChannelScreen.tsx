@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { StreamConfig } from '@/config/streams';
+import { isExpoGo } from '@/services/audioService';
 import { useAudioStore } from '@/store/audioStore';
 
 import { Text } from './ui';
@@ -24,6 +25,17 @@ export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
       style={{ backgroundColor: stream.backgroundColor, paddingTop: insets.top }}
       className="flex-1 items-center justify-center"
     >
+      {/* Expo Go Indicator */}
+      {isExpoGo && (
+        <View className="absolute left-4 top-4" style={{ marginTop: insets.top }}>
+          <View className="rounded-full bg-yellow-500 px-3 py-1">
+            <Text size="xs" className="font-medium text-white">
+              Expo Go - No Audio
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Station Name */}
       <View className="mb-8">
         <Text
@@ -54,7 +66,7 @@ export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
           </>
         ) : (
           <Text variant="muted" className="text-center">
-            Live Stream
+            {isExpoGo ? 'Audio requires development build' : 'Live Stream'}
           </Text>
         )}
       </View>

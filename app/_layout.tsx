@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { queryClient } from '@/api/queryClient';
+import { getAudioService, isExpoGo } from '@/services/audioService';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
@@ -16,20 +17,20 @@ export default function RootLayout(): JSX.Element {
 
   useEffect(() => {
     const initPlayer = async (): Promise<void> => {
-      try {
-        // Dynamically import TrackPlayer only on native platforms
-        // This allows the app to run in Expo Go without crashing
-        const TrackPlayer = await import('react-native-track-player');
-        const { setupPlayer } = await import('@/services/playerSetup');
-        const { PlaybackService } = await import('@/services/playbackService');
+      if (isExpoGo) {
+        console.log('Running in Expo Go - audio disabled. Create a development build for audio.');
+        setPlayerSetup(false);
+        setTrackPlayerAvailable(false);
+        return;
+      }
 
-        TrackPlayer.default.registerPlaybackService(() => PlaybackService);
-        const isSetup = await setupPlayer();
+      try {
+        const audioService = await getAudioService();
+        const isSetup = await audioService.setup();
         setPlayerSetup(isSetup);
-        setTrackPlayerAvailable(true);
+        setTrackPlayerAvailable(audioService.isAvailable);
       } catch (error) {
-        // TrackPlayer not available (e.g., running in Expo Go)
-        console.log('Audio player not available in Expo Go. Use a development build for audio.');
+        console.log('Failed to setup audio:', error);
         setPlayerSetup(false);
         setTrackPlayerAvailable(false);
       }
