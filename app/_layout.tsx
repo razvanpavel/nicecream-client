@@ -2,34 +2,40 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
-import TrackPlayer from 'react-native-track-player';
 import 'react-native-reanimated';
 
 import { queryClient } from '@/api/queryClient';
-import { PlaybackService } from '@/services/playbackService';
-import { setupPlayer } from '@/services/playerSetup';
 import { useAppStore } from '@/store/appStore';
+import { useAudioStore } from '@/store/audioStore';
 
 import '../global.css';
 
-// Register playback service (native only)
-if (Platform.OS !== 'web') {
-  TrackPlayer.registerPlaybackService(() => PlaybackService);
-}
-
 export default function RootLayout(): JSX.Element {
   const setPlayerSetup = useAppStore((state) => state.setPlayerSetup);
+  const setTrackPlayerAvailable = useAudioStore((state) => state.setTrackPlayerAvailable);
 
   useEffect(() => {
     const initPlayer = async (): Promise<void> => {
-      if (Platform.OS !== 'web') {
+      try {
+        // Dynamically import TrackPlayer only on native platforms
+        // This allows the app to run in Expo Go without crashing
+        const TrackPlayer = await import('react-native-track-player');
+        const { setupPlayer } = await import('@/services/playerSetup');
+        const { PlaybackService } = await import('@/services/playbackService');
+
+        TrackPlayer.default.registerPlaybackService(() => PlaybackService);
         const isSetup = await setupPlayer();
         setPlayerSetup(isSetup);
+        setTrackPlayerAvailable(true);
+      } catch (error) {
+        // TrackPlayer not available (e.g., running in Expo Go)
+        console.log('Audio player not available in Expo Go. Use a development build for audio.');
+        setPlayerSetup(false);
+        setTrackPlayerAvailable(false);
       }
     };
     void initPlayer();
-  }, [setPlayerSetup]);
+  }, [setPlayerSetup, setTrackPlayerAvailable]);
 
   return (
     <QueryClientProvider client={queryClient}>
