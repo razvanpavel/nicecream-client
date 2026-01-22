@@ -2,25 +2,18 @@ import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { STREAMS, DEFAULT_STREAM_INDEX } from '@/config/streams';
-import { useAudioStore } from '@/store/audioStore';
 
 import { ChannelScreen } from './ChannelScreen';
 import { Text } from './ui';
 
 export function SwipePager(): JSX.Element {
   const [currentIndex, setCurrentIndex] = useState(DEFAULT_STREAM_INDEX);
-  const playIcecastStream = useAudioStore((state) => state.playIcecastStream);
 
-  const goToStream = useCallback(
-    (index: number): void => {
-      setCurrentIndex(index);
-      const stream = STREAMS[index];
-      if (stream !== undefined) {
-        void playIcecastStream(stream.url, stream.name);
-      }
-    },
-    [playIcecastStream]
-  );
+  // NOTE: We intentionally don't auto-play audio on navigation.
+  // User must tap play button to start audio (UX best practice + browser autoplay policy)
+  const goToStream = useCallback((index: number): void => {
+    setCurrentIndex(index);
+  }, []);
 
   const goLeft = useCallback((): void => {
     const newIndex = currentIndex === 0 ? STREAMS.length - 1 : currentIndex - 1;
@@ -45,7 +38,7 @@ export function SwipePager(): JSX.Element {
       {/* Navigation Arrows */}
       <Pressable
         onPress={goLeft}
-        style={{
+        style={({ pressed }) => ({
           position: 'absolute',
           left: 20,
           top: '50%',
@@ -53,17 +46,17 @@ export function SwipePager(): JSX.Element {
           width: 50,
           height: 50,
           borderRadius: 25,
-          backgroundColor: 'rgba(0,0,0,0.3)',
+          backgroundColor: pressed ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)',
           justifyContent: 'center',
           alignItems: 'center',
-        }}
+        })}
       >
         <Text style={{ color: 'white', fontSize: 24 }}>←</Text>
       </Pressable>
 
       <Pressable
         onPress={goRight}
-        style={{
+        style={({ pressed }) => ({
           position: 'absolute',
           right: 20,
           top: '50%',
@@ -71,10 +64,10 @@ export function SwipePager(): JSX.Element {
           width: 50,
           height: 50,
           borderRadius: 25,
-          backgroundColor: 'rgba(0,0,0,0.3)',
+          backgroundColor: pressed ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)',
           justifyContent: 'center',
           alignItems: 'center',
-        }}
+        })}
       >
         <Text style={{ color: 'white', fontSize: 24 }}>→</Text>
       </Pressable>
@@ -100,6 +93,8 @@ export function SwipePager(): JSX.Element {
                 borderRadius: 6,
                 backgroundColor:
                   index === currentIndex ? stream.color : 'rgba(0,0,0,0.2)',
+                borderWidth: index === currentIndex ? 0 : 1,
+                borderColor: 'rgba(0,0,0,0.1)',
               }}
             />
           </Pressable>

@@ -2,90 +2,126 @@ import { create } from 'zustand';
 
 import { getAudioService, isExpoGo } from '@/services/audioService';
 
+type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
+
 interface StreamMetadata {
   title?: string;
   artist?: string;
 }
 
 interface AudioState {
-  isPlaying: boolean;
+  // Playback state
+  status: PlaybackStatus;
   currentStreamUrl: string | null;
   currentStreamName: string | null;
   streamMetadata: StreamMetadata | null;
+  error: string | null;
+
+  // Feature flags
   isTrackPlayerAvailable: boolean;
+  hasUserInteracted: boolean;
 
   // Actions
-  playIcecastStream: (url: string, stationName: string) => Promise<void>;
+  playStream: (url: string, stationName: string) => Promise<void>;
   togglePlayback: () => Promise<void>;
   stop: () => Promise<void>;
   setStreamMetadata: (metadata: StreamMetadata) => void;
   setTrackPlayerAvailable: (available: boolean) => void;
+  setUserInteracted: () => void;
+  clearError: () => void;
 }
 
 export const useAudioStore = create<AudioState>((set, get) => ({
-  isPlaying: false,
+  status: 'idle',
   currentStreamUrl: null,
   currentStreamName: null,
   streamMetadata: null,
+  error: null,
   isTrackPlayerAvailable: !isExpoGo,
+  hasUserInteracted: false,
 
-  playIcecastStream: async (url: string, stationName: string): Promise<void> => {
-    const { currentStreamUrl } = get();
+  playStream: async (url: string, stationName: string): Promise<void> => {
+    const { currentStreamUrl, status } = get();
 
-    // Don't restart if already playing this stream
-    if (currentStreamUrl === url) {
+    // Don't restart if already playing/loading this stream
+    if (currentStreamUrl === url && (status === 'playing' || status === 'loading')) {
       return;
     }
 
-    set({ currentStreamUrl: url, currentStreamName: stationName });
+    // Update state to loading
+    set({
+      status: 'loading',
+      currentStreamUrl: url,
+      currentStreamName: stationName,
+      error: null,
+      hasUserInteracted: true,
+    });
 
     if (isExpoGo) {
+      // Simulate loading delay for Expo Go
+      await new Promise((resolve) => setTimeout(resolve, 300));
       console.log(`[Expo Go] Would play: ${stationName}`);
-      set({ isPlaying: true });
+      set({ status: 'playing' });
       return;
     }
 
     try {
       const audioService = await getAudioService();
       await audioService.play(url, stationName);
-      set({ isPlaying: true });
+      set({ status: 'playing' });
     } catch (error) {
-      console.log('Failed to play stream:', error);
-      set({ isPlaying: true }); // Still update UI state
+      const errorMessage = error instanceof Error ? error.message : 'Failed to play stream';
+      console.error('Failed to play stream:', error);
+      set({ status: 'error', error: errorMessage });
     }
   },
 
   togglePlayback: async (): Promise<void> => {
-    const { isPlaying } = get();
+    const { status, currentStreamUrl, currentStreamName } = get();
+
+    // Mark user interaction
+    set({ hasUserInteracted: true });
+
+    // If idle or error with a stream selected, start playing
+    if ((status === 'idle' || status === 'error') && currentStreamUrl !== null && currentStreamName !== null) {
+      await get().playStream(currentStreamUrl, currentStreamName);
+      return;
+    }
+
+    // If loading, ignore
+    if (status === 'loading') {
+      return;
+    }
 
     if (isExpoGo) {
-      set({ isPlaying: !isPlaying });
+      set({ status: status === 'playing' ? 'paused' : 'playing' });
       return;
     }
 
     try {
       const audioService = await getAudioService();
       const nowPlaying = await audioService.togglePlayback();
-      set({ isPlaying: nowPlaying });
+      set({ status: nowPlaying ? 'playing' : 'paused' });
     } catch (error) {
-      console.log('Failed to toggle playback:', error);
-      set({ isPlaying: !isPlaying });
+      const errorMessage = error instanceof Error ? error.message : 'Playback error';
+      console.error('Failed to toggle playback:', error);
+      set({ status: 'error', error: errorMessage });
     }
   },
 
   stop: async (): Promise<void> => {
     if (isExpoGo) {
-      set({ isPlaying: false, currentStreamUrl: null, currentStreamName: null });
+      set({ status: 'idle', currentStreamUrl: null, currentStreamName: null });
       return;
     }
 
     try {
       const audioService = await getAudioService();
       await audioService.stop();
-      set({ isPlaying: false, currentStreamUrl: null, currentStreamName: null });
+      set({ status: 'idle', currentStreamUrl: null, currentStreamName: null });
     } catch (error) {
-      console.log('Failed to stop playback:', error);
-      set({ isPlaying: false, currentStreamUrl: null, currentStreamName: null });
+      console.error('Failed to stop playback:', error);
+      set({ status: 'idle', currentStreamUrl: null, currentStreamName: null });
     }
   },
 
@@ -96,4 +132,17 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   setTrackPlayerAvailable: (available: boolean): void => {
     set({ isTrackPlayerAvailable: available });
   },
+
+  setUserInteracted: (): void => {
+    set({ hasUserInteracted: true });
+  },
+
+  clearError: (): void => {
+    set({ error: null, status: 'idle' });
+  },
 }));
+
+// Helper selectors
+export const selectIsPlaying = (state: AudioState): boolean => state.status === 'playing';
+export const selectIsLoading = (state: AudioState): boolean => state.status === 'loading';
+export const selectHasError = (state: AudioState): boolean => state.status === 'error';

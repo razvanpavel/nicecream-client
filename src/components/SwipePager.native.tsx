@@ -4,7 +4,6 @@ import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager
 
 import { STREAMS } from '@/config/streams';
 import { useHaptics } from '@/hooks/useHaptics';
-import { useAudioStore } from '@/store/audioStore';
 
 import { ChannelScreen } from './ChannelScreen';
 
@@ -19,7 +18,6 @@ const INFINITE_PAGES = [
 
 export function SwipePager(): JSX.Element {
   const pagerRef = useRef<PagerView>(null);
-  const playIcecastStream = useAudioStore((state) => state.playIcecastStream);
   const haptics = useHaptics();
 
   const handlePageSelected = useCallback(
@@ -38,13 +36,14 @@ export function SwipePager(): JSX.Element {
         pagerRef.current?.setPageWithoutAnimation(1);
       }
 
-      // Play the stream for current page
-      const stream = INFINITE_PAGES[position];
-      if (stream !== undefined) {
-        await playIcecastStream(stream.url, stream.name);
-      }
+      // NOTE: We intentionally don't auto-play audio on swipe.
+      // This follows UX best practices:
+      // 1. Audio should only play when user explicitly taps play
+      // 2. Prevents unexpected audio when browsing
+      // 3. Complies with browser autoplay policies (for web parity)
+      // 4. Saves bandwidth and battery
     },
-    [playIcecastStream, haptics]
+    [haptics]
   );
 
   return (

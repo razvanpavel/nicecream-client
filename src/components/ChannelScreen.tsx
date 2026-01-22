@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { StreamConfig } from '@/config/streams';
@@ -14,10 +14,31 @@ interface ChannelScreenProps {
 
 export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
   const insets = useSafeAreaInsets();
-  const { isPlaying, togglePlayback, streamMetadata } = useAudioStore();
+  const {
+    status,
+    currentStreamUrl,
+    error,
+    togglePlayback,
+    playStream,
+    clearError,
+  } = useAudioStore();
+
+  const isThisStreamActive = currentStreamUrl === stream.url;
+  const isPlaying = status === 'playing' && isThisStreamActive;
+  const isLoading = status === 'loading' && isThisStreamActive;
+  const hasError = status === 'error' && isThisStreamActive;
 
   const handlePlayPause = (): void => {
-    void togglePlayback();
+    if (isThisStreamActive) {
+      void togglePlayback();
+    } else {
+      void playStream(stream.url, stream.name);
+    }
+  };
+
+  const handleRetry = (): void => {
+    clearError();
+    void playStream(stream.url, stream.name);
   };
 
   return (
@@ -25,19 +46,26 @@ export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
       style={{ backgroundColor: stream.backgroundColor, paddingTop: insets.top }}
       className="flex-1 items-center justify-center"
     >
-      {/* Expo Go Indicator */}
-      {isExpoGo && (
-        <View className="absolute left-4 top-4" style={{ marginTop: insets.top }}>
+      {/* Status Badge */}
+      <View className="absolute left-4 top-4" style={{ marginTop: insets.top }}>
+        {isExpoGo ? (
           <View className="rounded-full bg-yellow-500 px-3 py-1">
             <Text size="xs" className="font-medium text-white">
               Expo Go - No Audio
             </Text>
           </View>
-        </View>
-      )}
+        ) : isPlaying ? (
+          <View className="flex-row items-center rounded-full bg-green-500 px-3 py-1">
+            <View className="mr-1.5 h-2 w-2 rounded-full bg-white" />
+            <Text size="xs" className="font-medium text-white">
+              LIVE
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
       {/* Station Name */}
-      <View className="mb-8">
+      <View className="mb-4">
         <Text
           variant="heading"
           size="3xl"
@@ -48,25 +76,23 @@ export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
         </Text>
       </View>
 
-      {/* Now Playing Info */}
-      <View className="mb-12 px-8">
-        {streamMetadata?.title !== undefined && streamMetadata.title !== '' ? (
-          <>
-            <Text variant="muted" className="mb-1 text-center">
-              Now Playing
-            </Text>
-            <Text variant="subheading" size="lg" className="text-center">
-              {streamMetadata.title}
-            </Text>
-            {streamMetadata.artist !== undefined && streamMetadata.artist !== '' && (
-              <Text variant="muted" className="mt-1 text-center">
-                {streamMetadata.artist}
-              </Text>
-            )}
-          </>
-        ) : (
+      {/* Status Text */}
+      <View className="mb-8 h-6">
+        {isLoading && (
           <Text variant="muted" className="text-center">
-            {isExpoGo ? 'Audio requires development build' : 'Live Stream'}
+            Connecting to stream...
+          </Text>
+        )}
+        {hasError && (
+          <Pressable onPress={handleRetry}>
+            <Text className="text-center text-red-500">
+              {error ?? 'Connection failed'} • Tap to retry
+            </Text>
+          </Pressable>
+        )}
+        {!isLoading && !hasError && (
+          <Text variant="muted" className="text-center">
+            {isPlaying ? 'Now streaming' : 'Tap to play'}
           </Text>
         )}
       </View>
@@ -74,30 +100,65 @@ export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
       {/* Play/Pause Button */}
       <Pressable
         onPress={handlePlayPause}
-        style={{ backgroundColor: stream.color }}
-        className="h-20 w-20 items-center justify-center rounded-full"
+        disabled={isLoading}
+        style={({ pressed }) => ({
+          backgroundColor: pressed ? adjustColor(stream.color, -20) : stream.color,
+          opacity: isLoading ? 0.7 : 1,
+        })}
+        className="h-24 w-24 items-center justify-center rounded-full shadow-lg"
       >
-        <Ionicons
-          name={isPlaying ? 'pause' : 'play'}
-          size={40}
-          color="white"
-          style={{ marginLeft: isPlaying ? 0 : 4 }}
-        />
+        {isLoading ? (
+          <ActivityIndicator size="large" color="white" />
+        ) : (
+          <Ionicons
+            name={isPlaying ? 'pause' : 'play'}
+            size={48}
+            color="white"
+            style={{ marginLeft: isPlaying ? 0 : 6 }}
+          />
+        )}
       </Pressable>
 
-      {/* Swipe Indicators */}
+      {/* Volume/Wave Animation (when playing) */}
+      {isPlaying && (
+        <View className="mt-6 flex-row items-end justify-center gap-1">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <View
+              key={i}
+              style={{
+                backgroundColor: stream.color,
+                opacity: 0.6,
+                width: 4,
+                height: 8 + Math.random() * 16,
+                borderRadius: 2,
+              }}
+            />
+          ))}
+        </View>
+      )}
+
+      {/* Swipe Hint */}
       <View
-        style={{ paddingBottom: insets.bottom + 20 }}
-        className="absolute bottom-0 w-full flex-row items-center justify-center"
+        style={{ paddingBottom: insets.bottom + 24 }}
+        className="absolute bottom-0 w-full items-center"
       >
-        <View className="flex-row items-center gap-2">
-          <Ionicons name="chevron-back" size={16} color={stream.color} />
+        <View className="flex-row items-center gap-2 rounded-full bg-black/10 px-4 py-2">
+          <Ionicons name="chevron-back" size={14} color={stream.color} />
           <Text variant="muted" size="sm">
-            Swipe to change station
+            Swipe for more stations
           </Text>
-          <Ionicons name="chevron-forward" size={16} color={stream.color} />
+          <Ionicons name="chevron-forward" size={14} color={stream.color} />
         </View>
       </View>
     </View>
   );
+}
+
+// Helper to darken/lighten a hex color
+function adjustColor(hex: string, amount: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amount));
+  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amount));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
