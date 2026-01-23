@@ -1,50 +1,90 @@
-# Welcome to your Expo app 👋
+# nicecream.fm
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+three channels of house music, curated by humans.
 
-## Get started
+a universal streaming app for iOS, Android, and Web built with Expo.
 
-1. Install dependencies
+## channels
 
-   ```bash
-   npm install
-   ```
+| channel | color | time of day |
+|---------|-------|-------------|
+| red | #EF3F36 | night (10pm - 6am) |
+| green | #5AB055 | morning (6am - 2pm) |
+| blue | #2972FF | day (2pm - 10pm) |
 
-2. Start the app
+the app automatically selects the channel based on time of day.
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## getting started
 
 ```bash
-npm run reset-project
+# install dependencies
+npm install
+
+# start development server
+npm start
+
+# or run specific platforms
+npm run web        # web only
+npm run ios        # iOS (requires dev build)
+npm run android    # Android (requires dev build)
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### development builds
 
-## Learn more
+audio playback requires a development build (Expo Go doesn't support native audio modules):
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+# create development build
+npm run build:dev
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+# or generate native projects locally
+npm run prebuild
+```
 
-## Join the community
+## tech stack
 
-Join our community of developers creating universal apps.
+- **expo** - universal react native framework
+- **expo router** - file-based routing with deep linking
+- **nativewind** - tailwind css for react native
+- **zustand** - state management
+- **react-native-track-player** - native audio with background playback
+- **tanstack query** - data fetching
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## project structure
+
+```
+app/                    # expo router pages
+  [channel].tsx         # /red, /green, /blue routes
+  +html.tsx             # web html template
+  _layout.tsx           # root layout
+src/
+  components/           # ui components
+  config/               # stream configuration
+  services/             # audio service (platform-specific)
+  store/                # zustand stores
+```
+
+## platform-specific code
+
+files use extensions to differentiate platforms:
+- `*.native.ts` - iOS/Android
+- `*.web.ts` - Web
+- `*.d.ts` - shared types
+
+## scripts
+
+| command | description |
+|---------|-------------|
+| `npm start` | start expo dev server |
+| `npm run web` | start web only |
+| `npm run typecheck` | typescript check |
+| `npm run lint` | eslint check |
+| `npm run format` | format with prettier |
+| `npm run build:dev` | eas development build |
+| `npm run build:prod` | eas production build |
+
+## web features
+
+- spacebar to play/pause
+- url-based routing (`/red`, `/green`, `/blue`)
+- auto-redirect to time-based default channel
