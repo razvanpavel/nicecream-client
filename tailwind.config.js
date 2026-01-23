@@ -5,17 +5,21 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50: '#fef2f2',
-          100: '#fee2e2',
-          500: '#ef4444',
-          600: '#dc2626',
-          700: '#b91c1c',
-        },
         // Nicecream brand colors
-        'nicecream-red': '#ef4444',
-        'nicecream-green': '#22c55e',
-        'nicecream-blue': '#3b82f6',
+        brand: {
+          green: '#5AB055',
+          red: '#EF3F36',
+          blue: '#2972FF',
+        },
+      },
+      fontFamily: {
+        heading: ['AlteHaasGrotesk-Bold'],
+      },
+      fontSize: {
+        '10xl': ['8.75rem', { lineHeight: '1.1' }],
+        '12xl': ['10.625rem', { lineHeight: '1.1' }],
+        '14xl': ['12.8125rem', { lineHeight: '1.1' }],
+        '16xl': ['15.3125rem', { lineHeight: '1.1' }],
       },
     },
   },

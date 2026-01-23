@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { StreamConfig } from '@/config/streams';
@@ -12,16 +12,10 @@ interface ChannelScreenProps {
   stream: StreamConfig;
 }
 
-export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
+export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElement {
   const insets = useSafeAreaInsets();
-  const {
-    status,
-    currentStreamUrl,
-    error,
-    togglePlayback,
-    playStream,
-    clearError,
-  } = useAudioStore();
+  const { status, currentStreamUrl, error, togglePlayback, playStream, clearError } =
+    useAudioStore();
 
   const isThisStreamActive = currentStreamUrl === stream.url;
   const isPlaying = status === 'playing' && isThisStreamActive;
@@ -41,94 +35,66 @@ export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
     void playStream(stream.url, stream.name);
   };
 
+  const isWeb = Platform.OS === 'web';
+
   return (
     <View
-      style={{ backgroundColor: stream.backgroundColor, paddingTop: insets.top }}
       className="flex-1 items-center justify-center"
+      style={{
+        backgroundColor: stream.color,
+        paddingTop: insets.top,
+        paddingBottom: insets.bottom,
+      }}
     >
       {/* Status Badge */}
-      <View className="absolute left-4 top-4" style={{ marginTop: insets.top }}>
+      <View className="absolute left-4" style={{ top: insets.top + 16 }}>
         {isExpoGo ? (
-          <View className="rounded-full bg-yellow-500 px-3 py-1">
-            <Text size="xs" className="font-medium text-white">
+          <View className="rounded-full bg-white/20 px-3 py-1">
+            <Text size="xs" className="text-white">
               Expo Go - No Audio
             </Text>
           </View>
         ) : isPlaying ? (
-          <View className="flex-row items-center rounded-full bg-green-500 px-3 py-1">
+          <View className="flex-row items-center rounded-full bg-white/20 px-3 py-1">
             <View className="mr-1.5 h-2 w-2 rounded-full bg-white" />
-            <Text size="xs" className="font-medium text-white">
+            <Text size="xs" className="text-white">
               LIVE
             </Text>
           </View>
         ) : null}
       </View>
 
-      {/* Station Name */}
-      <View className="mb-4">
-        <Text
-          variant="heading"
-          size="3xl"
-          style={{ color: stream.color }}
-          className="text-center"
-        >
-          {stream.name}
-        </Text>
-      </View>
+      {/* Station Name - Large heading, lowercase */}
+      <Text className="mb-4 text-center font-heading text-10xl lowercase text-white md:text-16xl">
+        {stream.name}
+      </Text>
 
       {/* Status Text */}
       <View className="mb-8 h-6">
-        {isLoading && (
-          <Text variant="muted" className="text-center">
-            Connecting to stream...
-          </Text>
-        )}
+        {isLoading && <Text className="text-center text-white/80">connecting to stream...</Text>}
         {hasError && (
           <Pressable onPress={handleRetry}>
-            <Text className="text-center text-red-500">
-              {error ?? 'Connection failed'} • Tap to retry
+            <Text className="text-center text-white/80">
+              {error ?? 'connection failed'} • tap to retry
             </Text>
           </Pressable>
         )}
         {!isLoading && !hasError && (
-          <Text variant="muted" className="text-center">
-            {isPlaying ? 'Now streaming' : 'Tap to play'}
+          <Text className="text-center text-white/80">
+            {isPlaying ? 'now streaming' : 'tap to play'}
           </Text>
         )}
       </View>
 
-      {/* Play/Pause Button */}
-      <Pressable
-        onPress={handlePlayPause}
-        disabled={isLoading}
-        style={({ pressed }) => ({
-          width: 96,
-          height: 96,
-          borderRadius: 48,
-          backgroundColor: isLoading
-            ? adjustColor(stream.color, 30) // Lighter when loading
-            : pressed
-              ? adjustColor(stream.color, -30) // Darker when pressed
-              : stream.color, // Normal color
-          alignItems: 'center',
-          justifyContent: 'center',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.2,
-          shadowRadius: 8,
-          elevation: 5,
-        })}
-      >
-        {isLoading ? (
-          <ActivityIndicator size="large" color="white" />
-        ) : (
-          <Ionicons
-            name={isPlaying ? 'pause' : 'play'}
-            size={48}
-            color="white"
-            style={{ marginLeft: isPlaying ? 0 : 6 }}
-          />
-        )}
+      {/* Play/Pause Button - White */}
+      <Pressable onPress={handlePlayPause} disabled={isLoading}>
+        <View className="h-24 w-24 items-center justify-center rounded-full bg-white shadow-lg">
+          {isLoading ? (
+            <ActivityIndicator size="large" color={stream.color} />
+          ) : (
+            <Ionicons name={isPlaying ? 'pause' : 'play'} size={48} color={stream.color} />
+          )}
+        </View>
       </Pressable>
 
       {/* Volume/Wave Animation (when playing) */}
@@ -137,40 +103,26 @@ export function ChannelScreen({ stream }: ChannelScreenProps): JSX.Element {
           {[1, 2, 3, 4, 5].map((i) => (
             <View
               key={i}
-              style={{
-                backgroundColor: stream.color,
-                opacity: 0.6,
-                width: 4,
-                height: 8 + Math.random() * 16,
-                borderRadius: 2,
-              }}
+              className="w-1 rounded-sm bg-white/60"
+              style={{ height: 8 + Math.random() * 16 }}
             />
           ))}
         </View>
       )}
 
-      {/* Swipe Hint */}
-      <View
-        style={{ paddingBottom: insets.bottom + 24 }}
-        className="absolute bottom-0 w-full items-center"
-      >
-        <View className="flex-row items-center gap-2 rounded-full bg-black/10 px-4 py-2">
-          <Ionicons name="chevron-back" size={14} color={stream.color} />
-          <Text variant="muted" size="sm">
-            Swipe for more stations
-          </Text>
-          <Ionicons name="chevron-forward" size={14} color={stream.color} />
+      {/* Swipe Hint - only on mobile */}
+      {!isWeb && (
+        <View
+          className="absolute left-0 right-0 items-center"
+          style={{ bottom: insets.bottom + 24 }}
+        >
+          <View className="flex-row items-center gap-2 rounded-full bg-white/20 px-4 py-2">
+            <Ionicons name="chevron-back" size={14} color="white" />
+            <Text className="text-sm text-white/80">swipe for more stations</Text>
+            <Ionicons name="chevron-forward" size={14} color="white" />
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
-}
-
-// Helper to darken/lighten a hex color
-function adjustColor(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amount));
-  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amount));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }

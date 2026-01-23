@@ -33,16 +33,8 @@ export interface TextProps extends RNTextProps, VariantProps<typeof textVariants
   className?: string;
 }
 
-export const Text = forwardRef<RNText, TextProps>(
-  ({ className, variant, size, ...props }, ref) => {
-    return (
-      <RNText
-        ref={ref}
-        className={cn(textVariants({ variant, size }), className)}
-        {...props}
-      />
-    );
-  }
-);
+export const Text = forwardRef<RNText, TextProps>(({ className, variant, size, ...props }, ref) => {
+  return <RNText ref={ref} className={cn(textVariants({ variant, size }), className)} {...props} />;
+});
 
 Text.displayName = 'Text';

@@ -1,5 +1,14 @@
+// Suppress warnings FIRST before any other imports trigger them
+import { LogBox } from 'react-native';
+LogBox.ignoreLogs([
+  'SafeAreaView has been deprecated',
+  'Invariant Violation: Your JavaScript code tried to access a native module',
+]);
+
 import { QueryClientProvider } from '@tanstack/react-query';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -12,9 +21,17 @@ import { useAudioStore } from '@/store/audioStore';
 
 import '../global.css';
 
-export default function RootLayout(): JSX.Element {
+// Keep splash screen visible while loading fonts
+SplashScreen.preventAutoHideAsync();
+
+export default function RootLayout(): React.ReactElement | null {
   const setPlayerSetup = useAppStore((state) => state.setPlayerSetup);
   const setTrackPlayerAvailable = useAudioStore((state) => state.setTrackPlayerAvailable);
+
+  const [fontsLoaded] = useFonts({
+    'AlteHaasGrotesk-Bold': require('../assets/fonts/AlteHaasGroteskBold.ttf'),
+    'AlteHaasGrotesk-Regular': require('../assets/fonts/AlteHaasGroteskRegular.ttf'),
+  });
 
   useEffect(() => {
     const initPlayer = async (): Promise<void> => {
@@ -39,11 +56,22 @@ export default function RootLayout(): JSX.Element {
     void initPlayer();
   }, [setPlayerSetup, setTrackPlayerAvailable]);
 
+  useEffect(() => {
+    if (fontsLoaded) {
+      void SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
+          <Stack.Screen name="[channel]" />
           <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         </Stack>
         <StatusBar style="auto" />

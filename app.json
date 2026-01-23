@@ -17,7 +17,8 @@
       "bundleIdentifier": "fm.nicecream.app",
       "infoPlist": {
         "UIBackgroundModes": ["audio"]
-      }
+      },
+      "associatedDomains": ["applinks:nicecream.fm", "applinks:www.nicecream.fm"]
     },
     "android": {
       "adaptiveIcon": {
@@ -31,6 +32,17 @@
         "WAKE_LOCK",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "nicecream.fm", "pathPrefix": "/" },
+            { "scheme": "https", "host": "www.nicecream.fm", "pathPrefix": "/" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "web": {

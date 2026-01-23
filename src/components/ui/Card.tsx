@@ -36,7 +36,7 @@ export interface CardTitleProps {
   className?: string;
 }
 
-export function CardTitle({ children, className }: CardTitleProps): JSX.Element {
+export function CardTitle({ children, className }: CardTitleProps): React.ReactElement {
   return (
     <Text variant="heading" size="xl" className={cn('', className)}>
       {children}
@@ -49,7 +49,7 @@ export interface CardDescriptionProps {
   className?: string;
 }
 
-export function CardDescription({ children, className }: CardDescriptionProps): JSX.Element {
+export function CardDescription({ children, className }: CardDescriptionProps): React.ReactElement {
   return (
     <Text variant="muted" size="sm" className={cn('', className)}>
       {children}

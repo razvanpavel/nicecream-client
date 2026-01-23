@@ -83,7 +83,11 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     set({ hasUserInteracted: true });
 
     // If idle or error with a stream selected, start playing
-    if ((status === 'idle' || status === 'error') && currentStreamUrl !== null && currentStreamName !== null) {
+    if (
+      (status === 'idle' || status === 'error') &&
+      currentStreamUrl !== null &&
+      currentStreamName !== null
+    ) {
       await get().playStream(currentStreamUrl, currentStreamName);
       return;
     }

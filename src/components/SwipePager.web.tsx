@@ -1,100 +1,70 @@
 import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { STREAMS, DEFAULT_STREAM_INDEX } from '@/config/streams';
+import { STREAMS, getDefaultStreamIndex } from '@/config/streams';
+import { useAudioStore } from '@/store/audioStore';
 
 import { ChannelScreen } from './ChannelScreen';
 import { Text } from './ui';
 
-export function SwipePager(): JSX.Element {
-  const [currentIndex, setCurrentIndex] = useState(DEFAULT_STREAM_INDEX);
+export function SwipePager(): React.ReactElement {
+  const [currentIndex, setCurrentIndex] = useState(getDefaultStreamIndex);
+  const { status, playStream } = useAudioStore();
 
-  // NOTE: We intentionally don't auto-play audio on navigation.
-  // User must tap play button to start audio (UX best practice + browser autoplay policy)
-  const goToStream = useCallback((index: number): void => {
-    setCurrentIndex(index);
-  }, []);
+  const goToIndex = useCallback(
+    (newIndex: number): void => {
+      let targetIndex = newIndex;
+      if (newIndex < 0) {
+        targetIndex = STREAMS.length - 1;
+      } else if (newIndex >= STREAMS.length) {
+        targetIndex = 0;
+      }
+      setCurrentIndex(targetIndex);
 
-  const goLeft = useCallback((): void => {
-    const newIndex = currentIndex === 0 ? STREAMS.length - 1 : currentIndex - 1;
-    goToStream(newIndex);
-  }, [currentIndex, goToStream]);
-
-  const goRight = useCallback((): void => {
-    const newIndex = currentIndex === STREAMS.length - 1 ? 0 : currentIndex + 1;
-    goToStream(newIndex);
-  }, [currentIndex, goToStream]);
+      // If music is playing, switch to the new stream
+      const stream = STREAMS[targetIndex];
+      if (status === 'playing' && stream !== undefined) {
+        void playStream(stream.url, stream.name);
+      }
+    },
+    [status, playStream]
+  );
 
   const currentStream = STREAMS[currentIndex];
-
   if (currentStream === undefined) {
     return <View />;
   }
 
   return (
-    <View style={{ flex: 1, position: 'relative' }}>
-      <ChannelScreen stream={currentStream} />
+    <View className="relative flex-1">
+      {/* Current screen - full screen */}
+      <View className="flex-1">
+        <ChannelScreen stream={currentStream} />
+      </View>
 
       {/* Navigation Arrows */}
       <Pressable
-        onPress={goLeft}
-        style={({ pressed }) => ({
-          position: 'absolute',
-          left: 20,
-          top: '50%',
-          transform: [{ translateY: -25 }],
-          width: 50,
-          height: 50,
-          borderRadius: 25,
-          backgroundColor: pressed ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)',
-          justifyContent: 'center',
-          alignItems: 'center',
-        })}
+        onPress={() => goToIndex(currentIndex - 1)}
+        className="absolute left-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full bg-white/20 active:bg-white/40"
       >
-        <Text style={{ color: 'white', fontSize: 24 }}>←</Text>
+        <Text className="text-xl text-white">←</Text>
       </Pressable>
 
       <Pressable
-        onPress={goRight}
-        style={({ pressed }) => ({
-          position: 'absolute',
-          right: 20,
-          top: '50%',
-          transform: [{ translateY: -25 }],
-          width: 50,
-          height: 50,
-          borderRadius: 25,
-          backgroundColor: pressed ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)',
-          justifyContent: 'center',
-          alignItems: 'center',
-        })}
+        onPress={() => goToIndex(currentIndex + 1)}
+        className="absolute right-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full bg-white/20 active:bg-white/40"
       >
-        <Text style={{ color: 'white', fontSize: 24 }}>→</Text>
+        <Text className="text-xl text-white">→</Text>
       </Pressable>
 
       {/* Dots Indicator */}
-      <View
-        style={{
-          position: 'absolute',
-          bottom: 100,
-          left: 0,
-          right: 0,
-          flexDirection: 'row',
-          justifyContent: 'center',
-          gap: 8,
-        }}
-      >
+      <View className="absolute bottom-10 left-0 right-0 flex-row justify-center gap-2">
         {STREAMS.map((stream, index) => (
-          <Pressable key={stream.id} onPress={() => goToStream(index)}>
+          <Pressable key={stream.id} onPress={() => goToIndex(index)}>
             <View
+              className="h-2.5 w-2.5 rounded-full"
               style={{
-                width: 12,
-                height: 12,
-                borderRadius: 6,
-                backgroundColor:
-                  index === currentIndex ? stream.color : 'rgba(0,0,0,0.2)',
-                borderWidth: index === currentIndex ? 0 : 1,
-                borderColor: 'rgba(0,0,0,0.1)',
+                backgroundColor: index === currentIndex ? 'white' : 'rgba(255,255,255,0.4)',
               }}
             />
           </Pressable>

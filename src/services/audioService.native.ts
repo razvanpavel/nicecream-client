@@ -3,6 +3,9 @@ import Constants from 'expo-constants';
 // Check if running in Expo Go
 const isExpoGo = Constants.appOwnership === 'expo';
 
+// Track if playback service has been registered
+let playbackServiceRegistered = false;
+
 interface AudioService {
   isAvailable: boolean;
   setup: () => Promise<boolean>;
@@ -34,14 +37,14 @@ const mockAudioService: AudioService = {
 // Real service using TrackPlayer
 const createRealAudioService = async (): Promise<AudioService> => {
   const TrackPlayer = await import('react-native-track-player');
-  const {
-    default: TP,
-    State,
-    Capability,
-    AppKilledPlaybackBehavior,
-    RepeatMode,
-    Event,
-  } = TrackPlayer;
+  const { default: TP, State, Capability, AppKilledPlaybackBehavior, RepeatMode } = TrackPlayer;
+
+  // Register playback service once (handles background playback)
+  if (!playbackServiceRegistered) {
+    const { PlaybackService } = await import('./playbackService');
+    TP.registerPlaybackService(() => PlaybackService);
+    playbackServiceRegistered = true;
+  }
 
   let isSetup = false;
 
@@ -52,28 +55,40 @@ const createRealAudioService = async (): Promise<AudioService> => {
       if (isSetup) return true;
 
       try {
+        // Check if already setup
         await TP.getActiveTrack();
         isSetup = true;
       } catch {
-        await TP.setupPlayer();
-        await TP.updateOptions({
-          android: {
-            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
-          },
-          capabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.Stop,
-          ],
-          compactCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+        // Setup the player
+        await TP.setupPlayer({
+          // Buffer settings for streaming
+          minBuffer: 15,
+          maxBuffer: 50,
+          playBuffer: 2,
+          backBuffer: 0,
         });
+
+        // Configure player options for background playback
+        await TP.updateOptions({
+          // Android-specific: Keep playing when app is killed
+          android: {
+            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
+          },
+
+          // Capabilities shown in notification and lock screen
+          capabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+
+          // Compact notification capabilities (Android)
+          compactCapabilities: [Capability.Play, Capability.Pause],
+
+          // Notification configuration
+          notificationCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+
+          // Progress bar in notification (disabled for live streams)
+          progressUpdateEventInterval: 0,
+        });
+
         await TP.setRepeatMode(RepeatMode.Off);
-
-        // Register events
-        TP.addEventListener(Event.RemotePlay, () => void TP.play());
-        TP.addEventListener(Event.RemotePause, () => void TP.pause());
-        TP.addEventListener(Event.RemoteStop, () => void TP.stop());
-
         isSetup = true;
       }
       return isSetup;
@@ -85,8 +100,11 @@ const createRealAudioService = async (): Promise<AudioService> => {
         id: 'stream',
         url,
         title,
-        artist: 'Live Stream',
+        artist: 'Nicecream.fm',
+        artwork: 'https://nicecream.fm/icon.png', // Add your app icon URL
         isLiveStream: true,
+        // For Icecast streams
+        type: TrackPlayer.TrackType.HLS,
       });
       await TP.play();
     },

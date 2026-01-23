@@ -1,0 +1,11 @@
+export interface AudioService {
+  isAvailable: boolean;
+  setup: () => Promise<boolean>;
+  play: (url: string, title: string) => Promise<void>;
+  pause: () => Promise<void>;
+  stop: () => Promise<void>;
+  togglePlayback: () => Promise<boolean>;
+}
+
+export function getAudioService(): Promise<AudioService>;
+export const isExpoGo: boolean;
