@@ -16,9 +16,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "fm.nicecream.app",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       },
-      "associatedDomains": ["applinks:nicecream.fm", "applinks:www.nicecream.fm"]
+      "associatedDomains": [
+        "applinks:nicecream.fm",
+        "applinks:www.nicecream.fm"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -38,10 +43,21 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "nicecream.fm", "pathPrefix": "/" },
-            { "scheme": "https", "host": "www.nicecream.fm", "pathPrefix": "/" }
+            {
+              "scheme": "https",
+              "host": "nicecream.fm",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.nicecream.fm",
+              "pathPrefix": "/"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -55,6 +71,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6a144976-a293-4158-9693-9be5e86e8f51"
+      }
+    },
+    "owner": "sfpavel"
   }
 }
