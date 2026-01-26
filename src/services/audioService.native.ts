@@ -3,7 +3,6 @@ import Constants from 'expo-constants';
 // Check if running in Expo Go
 const isExpoGo = Constants.appOwnership === 'expo';
 
-
 interface AudioService {
   isAvailable: boolean;
   setup: () => Promise<boolean>;

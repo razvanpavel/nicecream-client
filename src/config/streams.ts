@@ -48,22 +48,38 @@ export const STREAM_INDEX = {
 
 /**
  * Get the default stream index based on time of day
- * - Morning (6 AM - 2 PM): Green
- * - Day (2 PM - 10 PM): Blue
- * - Night (10 PM - 6 AM): Red
+ * - Morning (8 AM - 2 PM): Green
+ * - Day (2 PM - 8 PM): Blue
+ * - Night (8 PM - 8 AM): Red
  */
 export function getDefaultStreamIndex(): number {
   const hour = new Date().getHours();
 
-  if (hour >= 6 && hour < 14) {
-    // Morning: 6 AM - 2 PM → Green
+  if (hour >= 8 && hour < 14) {
+    // Morning: 8 AM - 2 PM → Green
     return STREAM_INDEX.GREEN;
-  } else if (hour >= 14 && hour < 22) {
-    // Day: 2 PM - 10 PM → Blue
+  } else if (hour >= 14 && hour < 20) {
+    // Day: 2 PM - 8 PM → Blue
     return STREAM_INDEX.BLUE;
   } else {
-    // Night: 10 PM - 6 AM → Red
+    // Night: 8 PM - 8 AM → Red
     return STREAM_INDEX.RED;
+  }
+}
+
+/**
+ * Get the channel ID (red, green, blue) for the current hour
+ * Used for APIs that require channel-based parameters
+ */
+export function getChannelForHour(hour?: number): 'red' | 'green' | 'blue' {
+  const currentHour = hour ?? new Date().getHours();
+
+  if (currentHour >= 8 && currentHour < 14) {
+    return 'green'; // Morning: 8 AM - 2 PM
+  } else if (currentHour >= 14 && currentHour < 20) {
+    return 'blue'; // Day: 2 PM - 8 PM
+  } else {
+    return 'red'; // Night: 8 PM - 8 AM
   }
 }
 
