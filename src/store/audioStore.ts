@@ -5,6 +5,17 @@ import { getAudioService, isExpoGo } from '@/services/audioService';
 // Request counter for cancelling stale play requests
 let currentPlayRequestId = 0;
 
+// Transition timeout to prevent deadlock
+let transitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+// Helper to clear transition timeout
+function clearTransitionTimeout(): void {
+  if (transitionTimeoutId !== null) {
+    clearTimeout(transitionTimeoutId);
+    transitionTimeoutId = null;
+  }
+}
+
 type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
 // P1 Fix: Error categorization for better UX
@@ -177,17 +188,33 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       isTransitioning: true,
     });
 
+    // Clear any existing transition timeout
+    if (transitionTimeoutId !== null) {
+      clearTimeout(transitionTimeoutId);
+    }
+
+    // Safety timeout to prevent deadlock if something goes wrong
+    transitionTimeoutId = setTimeout(() => {
+      const state = get();
+      if (state.isTransitioning) {
+        console.warn('[AudioStore] Transition timeout - clearing flag');
+        set({ isTransitioning: false });
+      }
+    }, 15000); // 15 second timeout
+
     if (isExpoGo) {
       // Simulate loading delay for Expo Go
       await new Promise((resolve) => setTimeout(resolve, 300));
 
       // Check if this request was superseded
       if (thisRequestId !== currentPlayRequestId) {
+        clearTransitionTimeout();
         return;
       }
 
       console.log(`[Expo Go] Would play: ${stationName}`);
-      set({ status: 'playing' });
+      clearTransitionTimeout();
+      set({ status: 'playing', isTransitioning: false });
       return;
     }
 
@@ -199,6 +226,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       try {
         // Check if this request was superseded
         if (thisRequestId !== currentPlayRequestId) {
+          clearTransitionTimeout();
           return;
         }
 
@@ -207,10 +235,12 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
         // Check if this request was superseded
         if (thisRequestId !== currentPlayRequestId) {
+          clearTransitionTimeout();
           return;
         }
 
         // Success - clear any retry state and end transition
+        clearTransitionTimeout();
         set({
           status: 'playing',
           retryCount: 0,
@@ -222,6 +252,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       } catch (error) {
         // Check if this request was superseded
         if (thisRequestId !== currentPlayRequestId) {
+          clearTransitionTimeout();
           return;
         }
 
@@ -233,6 +264,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
         // Don't retry non-retryable errors
         if (!lastError.isRetryable) {
+          clearTransitionTimeout();
           set({
             status: 'error',
             error: lastError,
@@ -266,12 +298,14 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
         // Check if superseded after delay
         if (thisRequestId !== currentPlayRequestId) {
+          clearTransitionTimeout();
           return;
         }
       }
     }
 
     // All retries exhausted
+    clearTransitionTimeout();
     if (lastError !== null) {
       set({
         status: 'error',

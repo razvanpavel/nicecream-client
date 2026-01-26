@@ -121,6 +121,12 @@ const createRealAudioService = async (): Promise<AudioService> => {
         await doSetup();
       }
 
+      // Check if superseded during setup
+      if (thisRequestId !== currentPlayRequestId) {
+        console.log('[AudioService] Play request superseded during setup');
+        return;
+      }
+
       // Check current state and pause gracefully if playing
       const currentState = await TP.getPlaybackState();
 
@@ -169,6 +175,30 @@ const createRealAudioService = async (): Promise<AudioService> => {
       }
 
       await TP.play();
+
+      // Wait for playback to actually start (with timeout)
+      const startTime = Date.now();
+      const PLAY_TIMEOUT = 5000; // 5 seconds
+
+      while (Date.now() - startTime < PLAY_TIMEOUT) {
+        if (thisRequestId !== currentPlayRequestId) {
+          return; // Superseded
+        }
+
+        const state = await TP.getPlaybackState();
+        if (state.state === State.Playing) {
+          return; // Success - playback confirmed!
+        }
+        if (state.state === State.Error) {
+          throw new Error('Playback failed to start');
+        }
+
+        // Wait before checking again
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      // Timeout reached
+      throw new Error('Playback start timeout');
     },
 
     pause: async (): Promise<void> => {

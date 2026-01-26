@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { StreamConfig } from '@/config/streams';
 import { isExpoGo } from '@/services/audioService';
-import { type ChannelId } from '@/store/appStore';
+import { type ChannelId, useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
 import { AuthorAttribution } from './AuthorAttribution';
@@ -19,10 +19,12 @@ export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElemen
   const insets = useSafeAreaInsets();
   const { status, currentStreamUrl, error, togglePlayback, playStream, clearError } =
     useAudioStore();
+  const isPlayerSetup = useAppStore((state) => state.isPlayerSetup);
 
   const isThisStreamActive = currentStreamUrl === stream.url;
   const isPlaying = status === 'playing' && isThisStreamActive;
-  const isLoading = status === 'loading' && isThisStreamActive;
+  // Disable button while loading this stream OR while player isn't ready (on native)
+  const isLoading = (status === 'loading' && isThisStreamActive) || (!isPlayerSetup && !isExpoGo);
   const hasError = status === 'error' && isThisStreamActive;
 
   const handlePlayPause = (): void => {
@@ -77,7 +79,7 @@ export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElemen
         </View>
 
         {/* Station Name - Large heading, lowercase */}
-        <Text className="text-10xl md:text-12xl lg:text-16xl mb-4 text-center font-heading lowercase text-white">
+        <Text className="mb-4 text-center font-heading text-10xl lowercase text-white md:text-12xl lg:text-16xl">
           {stream.name}
         </Text>
 

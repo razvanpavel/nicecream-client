@@ -44,25 +44,41 @@ export function PlaybackService(): void {
   TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
     const store = useAudioStore.getState();
 
-    // During controlled transitions, only allow 'playing' state through
-    // This prevents pause/stop/idle from overwriting our 'loading' state
+    // During controlled transitions, handle state changes appropriately
+    // This prevents unexpected states from overwriting our 'loading' state
     if (store.isTransitioning) {
-      if (event.state === State.Playing) {
-        useAudioStore.setState({ status: 'playing', isTransitioning: false });
-      } else if (event.state === State.Error) {
-        useAudioStore.setState({
-          status: 'error',
-          error: { message: 'Playback error', category: 'unknown', isRetryable: true },
-          isTransitioning: false,
-        });
+      switch (event.state) {
+        case State.Playing:
+          useAudioStore.setState({ status: 'playing', isTransitioning: false });
+          break;
+        case State.Error:
+          useAudioStore.setState({
+            status: 'error',
+            error: { message: 'Playback error', category: 'unknown', isRetryable: true },
+            isTransitioning: false,
+          });
+          break;
+        case State.Buffering:
+        case State.Loading:
+          // Expected during transition - keep status as 'loading'
+          break;
+        case State.Paused:
+          // User might have quickly toggled - allow through
+          useAudioStore.setState({ status: 'paused', isTransitioning: false });
+          break;
+        case State.Stopped:
+        case State.None:
+          // Unexpected during transition - log but don't change state
+          console.warn('[PlaybackService] Unexpected stop during transition');
+          break;
       }
       return;
     }
 
     switch (event.state) {
       case State.Playing:
-        // Only update if we're coming from paused (resume from remote control)
-        if (store.status === 'paused') {
+        // Update to playing from any non-playing state
+        if (store.status !== 'playing') {
           useAudioStore.setState({ status: 'playing' });
         }
         break;
