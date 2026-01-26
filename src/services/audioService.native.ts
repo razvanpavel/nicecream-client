@@ -10,6 +10,7 @@ interface AudioService {
   pause: () => Promise<void>;
   stop: () => Promise<void>;
   togglePlayback: () => Promise<boolean>;
+  destroy: () => void;
 }
 
 // Mock service for Expo Go
@@ -32,6 +33,9 @@ const mockAudioService: AudioService = {
     console.log('[Mock Audio] Would toggle playback');
     return Promise.resolve(false);
   },
+  destroy: (): void => {
+    console.log('[Mock Audio] Would destroy');
+  },
 };
 
 // Real service using TrackPlayer
@@ -40,51 +44,66 @@ const createRealAudioService = async (): Promise<AudioService> => {
   const { default: TP, State, Capability, AppKilledPlaybackBehavior, RepeatMode } = TrackPlayer;
 
   let isSetup = false;
+  // P0 Fix: Setup promise deduplication
+  let setupPromise: Promise<boolean> | null = null;
 
   return {
     isAvailable: true,
 
     setup: async (): Promise<boolean> => {
+      // Return existing setup promise if in progress
+      if (setupPromise !== null) {
+        return setupPromise;
+      }
+
       if (isSetup) return true;
 
+      setupPromise = (async (): Promise<boolean> => {
+        try {
+          // Check if already setup
+          await TP.getActiveTrack();
+          isSetup = true;
+        } catch {
+          // Setup the player
+          await TP.setupPlayer({
+            // Buffer settings for streaming
+            minBuffer: 15,
+            maxBuffer: 50,
+            playBuffer: 2,
+            backBuffer: 0,
+          });
+
+          // Configure player options for background playback
+          await TP.updateOptions({
+            // Android-specific: Keep playing when app is killed
+            android: {
+              appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
+            },
+
+            // Capabilities shown in notification and lock screen
+            capabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+
+            // Compact notification capabilities (Android)
+            compactCapabilities: [Capability.Play, Capability.Pause],
+
+            // Notification configuration
+            notificationCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+
+            // Progress bar in notification (disabled for live streams)
+            progressUpdateEventInterval: 0,
+          });
+
+          await TP.setRepeatMode(RepeatMode.Off);
+          isSetup = true;
+        }
+        return isSetup;
+      })();
+
       try {
-        // Check if already setup
-        await TP.getActiveTrack();
-        isSetup = true;
-      } catch {
-        // Setup the player
-        await TP.setupPlayer({
-          // Buffer settings for streaming
-          minBuffer: 15,
-          maxBuffer: 50,
-          playBuffer: 2,
-          backBuffer: 0,
-        });
-
-        // Configure player options for background playback
-        await TP.updateOptions({
-          // Android-specific: Keep playing when app is killed
-          android: {
-            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
-          },
-
-          // Capabilities shown in notification and lock screen
-          capabilities: [Capability.Play, Capability.Pause, Capability.Stop],
-
-          // Compact notification capabilities (Android)
-          compactCapabilities: [Capability.Play, Capability.Pause],
-
-          // Notification configuration
-          notificationCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
-
-          // Progress bar in notification (disabled for live streams)
-          progressUpdateEventInterval: 0,
-        });
-
-        await TP.setRepeatMode(RepeatMode.Off);
-        isSetup = true;
+        return await setupPromise;
+      } finally {
+        setupPromise = null;
       }
-      return isSetup;
     },
 
     play: async (url: string, title: string): Promise<void> => {
@@ -129,6 +148,13 @@ const createRealAudioService = async (): Promise<AudioService> => {
         await TP.play();
         return true;
       }
+    },
+
+    destroy: (): void => {
+      // Reset the player on destroy
+      void TP.reset();
+      isSetup = false;
+      setupPromise = null;
     },
   };
 };

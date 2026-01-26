@@ -65,7 +65,7 @@ export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElemen
       </View>
 
       {/* Station Name - Large heading, lowercase */}
-      <Text className="mb-4 text-center font-heading text-10xl lowercase text-white md:text-16xl">
+      <Text className="mb-4 text-center font-heading text-8xl lowercase text-white md:text-10xl lg:text-16xl">
         {stream.name}
       </Text>
 
@@ -75,7 +75,7 @@ export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElemen
         {hasError && (
           <Pressable onPress={handleRetry}>
             <Text className="text-center text-white/80">
-              {error ?? 'connection failed'} • tap to retry
+              {error?.message ?? 'connection failed'} • tap to retry
             </Text>
           </Pressable>
         )}

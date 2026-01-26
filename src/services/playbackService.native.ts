@@ -70,7 +70,10 @@ export function PlaybackService(): void {
         }
         break;
       case State.Error:
-        useAudioStore.setState({ status: 'error', error: 'Playback error' });
+        useAudioStore.setState({
+          status: 'error',
+          error: { message: 'Playback error', category: 'unknown', isRetryable: true },
+        });
         break;
     }
   });
@@ -80,7 +83,11 @@ export function PlaybackService(): void {
     console.error('Playback error:', event);
     useAudioStore.setState({
       status: 'error',
-      error: event.message,
+      error: {
+        message: event.message,
+        category: 'unknown',
+        isRetryable: true,
+      },
     });
   });
 

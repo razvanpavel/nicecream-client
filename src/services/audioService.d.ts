@@ -5,6 +5,7 @@ export interface AudioService {
   pause: () => Promise<void>;
   stop: () => Promise<void>;
   togglePlayback: () => Promise<boolean>;
+  destroy: () => void;
 }
 
 export function getAudioService(): Promise<AudioService>;

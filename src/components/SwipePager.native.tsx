@@ -40,7 +40,7 @@ function getInitialPage(): number {
 export function SwipePager(): React.ReactElement {
   const pagerRef = useRef<PagerView>(null);
   const haptics = useHaptics();
-  const { status, playStream } = useAudioStore();
+  const playStream = useAudioStore((state) => state.playStream);
   const initialPage = getInitialPage();
 
   const handlePageSelected = useCallback(
@@ -59,19 +59,23 @@ export function SwipePager(): React.ReactElement {
         pagerRef.current?.setPageWithoutAnimation(1);
       }
 
-      // If music is playing, switch to the new stream
+      // Get fresh status from store (not from closure)
+      const currentStatus = useAudioStore.getState().status;
+
+      // If music is playing or loading, switch to the new stream
       const stream = INFINITE_PAGES[position];
-      if (status === 'playing' && stream !== undefined) {
+      if ((currentStatus === 'playing' || currentStatus === 'loading') && stream !== undefined) {
         void playStream(stream.url, stream.name);
       }
     },
-    [haptics, status, playStream]
+    [haptics, playStream]
   );
 
   return (
     <PagerView
       ref={pagerRef}
-      className="flex-1"
+      // eslint-disable-next-line react-native/no-inline-styles
+      style={{ flex: 1 }}
       initialPage={initialPage}
       onPageSelected={(e) => {
         void handlePageSelected(e);

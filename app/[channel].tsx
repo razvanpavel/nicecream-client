@@ -46,6 +46,20 @@ export default function ChannelRoute(): React.ReactElement {
   const currentChannel: ChannelId = isChannelId(channel) ? channel : 'green';
   const stream = STREAMS.find((s) => s.id === currentChannel);
 
+  // When channel changes, switch stream if already playing
+  useEffect(() => {
+    if (stream === undefined) return;
+
+    // Get fresh status from store to avoid stale closure
+    const currentStatus = useAudioStore.getState().status;
+    const currentUrl = useAudioStore.getState().currentStreamUrl;
+
+    // If music is playing/loading a different stream, switch to this one
+    if ((currentStatus === 'playing' || currentStatus === 'loading') && currentUrl !== stream.url) {
+      void playStream(stream.url, stream.name);
+    }
+  }, [currentChannel, stream, playStream]);
+
   // Spacebar to play/pause (web only)
   useEffect(() => {
     if (Platform.OS !== 'web' || stream === undefined) return undefined;
