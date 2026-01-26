@@ -6,28 +6,20 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "ios": {
-        "appleTeamId": "Y26P6FJZS5"
-      }
+      "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "ios": {
-        "appleTeamId": "Y26P6FJZS5"
-      }
+      "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true,
-      "ios": {
-        "appleTeamId": "Y26P6FJZS5"
-      }
+      "autoIncrement": true
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "6758226259"
+        "ascAppId": "6758226259",
+        "appleTeamId": "Y26P6FJZS5"
       }
     }
   }
