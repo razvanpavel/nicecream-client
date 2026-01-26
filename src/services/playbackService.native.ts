@@ -39,14 +39,28 @@ export function PlaybackService(): void {
   });
 
   // Sync playback state changes to Zustand store
-  // Note: 'playing' state is handled by audioStore.playStream to prevent race conditions
+  // Note: During controlled transitions (isTransitioning=true), we ignore most state changes
+  // to prevent the store from being overwritten during stream switches
   TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
     const store = useAudioStore.getState();
 
+    // During controlled transitions, only allow 'playing' state through
+    // This prevents pause/stop/idle from overwriting our 'loading' state
+    if (store.isTransitioning) {
+      if (event.state === State.Playing) {
+        useAudioStore.setState({ status: 'playing', isTransitioning: false });
+      } else if (event.state === State.Error) {
+        useAudioStore.setState({
+          status: 'error',
+          error: { message: 'Playback error', category: 'unknown', isRetryable: true },
+          isTransitioning: false,
+        });
+      }
+      return;
+    }
+
     switch (event.state) {
       case State.Playing:
-        // Don't set 'playing' here - let audioStore.playStream handle it
-        // This prevents race conditions with the store action
         // Only update if we're coming from paused (resume from remote control)
         if (store.status === 'paused') {
           useAudioStore.setState({ status: 'playing' });
@@ -65,7 +79,9 @@ export function PlaybackService(): void {
         break;
       case State.Buffering:
       case State.Loading:
-        if (store.status !== 'loading') {
+        // Only set loading if we're coming from idle - not from playing
+        // Buffering during playback is normal for live streams
+        if (store.status === 'idle') {
           useAudioStore.setState({ status: 'loading' });
         }
         break;

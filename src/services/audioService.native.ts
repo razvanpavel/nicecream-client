@@ -46,6 +46,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
   let isSetup = false;
   // P0 Fix: Setup promise deduplication
   let setupPromise: Promise<boolean> | null = null;
+  // Request ID to prevent race conditions during rapid stream switching
+  let currentPlayRequestId = 0;
 
   return {
     isAvailable: true,
@@ -56,7 +58,9 @@ const createRealAudioService = async (): Promise<AudioService> => {
         return setupPromise;
       }
 
-      if (isSetup) return true;
+      if (isSetup) {
+        return true;
+      }
 
       setupPromise = (async (): Promise<boolean> => {
         try {
@@ -107,16 +111,40 @@ const createRealAudioService = async (): Promise<AudioService> => {
     },
 
     play: async (url: string, title: string): Promise<void> => {
+      const thisRequestId = ++currentPlayRequestId;
+
       // Check current state and pause gracefully if playing
       const currentState = await TP.getPlaybackState();
+
+      if (thisRequestId !== currentPlayRequestId) {
+        return;
+      }
+
       if (currentState.state === State.Playing || currentState.state === State.Buffering) {
         await TP.pause();
-        // Small delay to allow audio hardware to flush buffers
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Delay to allow audio hardware to flush buffers
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
+      if (thisRequestId !== currentPlayRequestId) {
+        return;
+      }
+
+      // Stop completely before reset to ensure clean state
+      await TP.stop();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      if (thisRequestId !== currentPlayRequestId) {
+        return;
       }
 
       // Reset queue
       await TP.reset();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      if (thisRequestId !== currentPlayRequestId) {
+        return;
+      }
 
       // Add new track and play
       await TP.add({
@@ -127,6 +155,10 @@ const createRealAudioService = async (): Promise<AudioService> => {
         artwork: 'https://nicecream.fm/icon.png',
         isLiveStream: true,
       });
+
+      if (thisRequestId !== currentPlayRequestId) {
+        return;
+      }
 
       await TP.play();
     },

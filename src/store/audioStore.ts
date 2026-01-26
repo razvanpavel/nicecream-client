@@ -37,6 +37,10 @@ interface AudioState {
   retryCount: number;
   isRetrying: boolean;
 
+  // Transition flag - when true, playbackService should not update status
+  // This prevents state conflicts during controlled stream switches
+  isTransitioning: boolean;
+
   // Actions
   playStream: (url: string, stationName: string) => Promise<void>;
   togglePlayback: () => Promise<void>;
@@ -147,6 +151,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   hasUserInteracted: false,
   retryCount: 0,
   isRetrying: false,
+  isTransitioning: false,
 
   playStream: async (url: string, stationName: string): Promise<void> => {
     const { currentStreamUrl, status } = get();
@@ -159,7 +164,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     // Increment request ID to cancel any in-flight requests
     const thisRequestId = ++currentPlayRequestId;
 
-    // Update state to loading
+    // Update state to loading and mark as transitioning
+    // isTransitioning prevents playbackService from overwriting our state
     set({
       status: 'loading',
       currentStreamUrl: url,
@@ -168,6 +174,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       hasUserInteracted: true,
       retryCount: 0,
       isRetrying: false,
+      isTransitioning: true,
     });
 
     if (isExpoGo) {
@@ -203,8 +210,14 @@ export const useAudioStore = create<AudioState>((set, get) => ({
           return;
         }
 
-        // Success - clear any retry state
-        set({ status: 'playing', retryCount: 0, isRetrying: false, error: null });
+        // Success - clear any retry state and end transition
+        set({
+          status: 'playing',
+          retryCount: 0,
+          isRetrying: false,
+          error: null,
+          isTransitioning: false,
+        });
         return;
       } catch (error) {
         // Check if this request was superseded
@@ -220,7 +233,13 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
         // Don't retry non-retryable errors
         if (!lastError.isRetryable) {
-          set({ status: 'error', error: lastError, retryCount, isRetrying: false });
+          set({
+            status: 'error',
+            error: lastError,
+            retryCount,
+            isRetrying: false,
+            isTransitioning: false,
+          });
           return;
         }
 
@@ -265,6 +284,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         },
         retryCount,
         isRetrying: false,
+        isTransitioning: false,
       });
     }
   },

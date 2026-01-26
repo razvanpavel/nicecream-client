@@ -42,10 +42,18 @@ export function SwipePager(): React.ReactElement {
   const haptics = useHaptics();
   const playStream = useAudioStore((state) => state.playStream);
   const initialPage = getInitialPage();
+  // Track programmatic jumps to avoid duplicate stream switches
+  const isJumpingRef = useRef(false);
 
   const handlePageSelected = useCallback(
     async (event: PagerViewOnPageSelectedEvent): Promise<void> => {
       const position = event.nativeEvent.position;
+
+      // If this is from a programmatic jump, skip stream switching logic
+      if (isJumpingRef.current) {
+        isJumpingRef.current = false;
+        return;
+      }
 
       // Trigger haptic feedback (native only)
       if (Platform.OS !== 'web') {
@@ -54,9 +62,25 @@ export function SwipePager(): React.ReactElement {
 
       // Handle infinite scroll boundaries
       if (position === 0) {
+        isJumpingRef.current = true;
         pagerRef.current?.setPageWithoutAnimation(3);
+        // Switch to the actual stream (Blue at page 3)
+        const stream = INFINITE_PAGES[3];
+        const currentStatus = useAudioStore.getState().status;
+        if ((currentStatus === 'playing' || currentStatus === 'loading') && stream !== undefined) {
+          void playStream(stream.url, stream.name);
+        }
+        return;
       } else if (position === 4) {
+        isJumpingRef.current = true;
         pagerRef.current?.setPageWithoutAnimation(1);
+        // Switch to the actual stream (Red at page 1)
+        const stream = INFINITE_PAGES[1];
+        const currentStatus = useAudioStore.getState().status;
+        if ((currentStatus === 'playing' || currentStatus === 'loading') && stream !== undefined) {
+          void playStream(stream.url, stream.name);
+        }
+        return;
       }
 
       // Get fresh status from store (not from closure)
