@@ -18,7 +18,8 @@
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       },
       "associatedDomains": [
         "applinks:nicecream.fm",
@@ -67,7 +68,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      ["expo-router", { "origin": "https://nicecream.fm" }]
     ],
     "experiments": {
       "typedRoutes": true

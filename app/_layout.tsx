@@ -1,9 +1,16 @@
 // Suppress warnings FIRST before any other imports trigger them
-import { LogBox } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 LogBox.ignoreLogs([
   'SafeAreaView has been deprecated',
   'Invariant Violation: Your JavaScript code tried to access a native module',
 ]);
+
+// Register playback service at module level (must happen before any TrackPlayer methods)
+if (Platform.OS !== 'web') {
+  const TrackPlayer = require('react-native-track-player').default;
+  const { PlaybackService } = require('@/services/playbackService');
+  TrackPlayer.registerPlaybackService(() => PlaybackService);
+}
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';

@@ -3,8 +3,6 @@ import Constants from 'expo-constants';
 // Check if running in Expo Go
 const isExpoGo = Constants.appOwnership === 'expo';
 
-// Track if playback service has been registered
-let playbackServiceRegistered = false;
 
 interface AudioService {
   isAvailable: boolean;
@@ -38,13 +36,6 @@ const mockAudioService: AudioService = {
 const createRealAudioService = async (): Promise<AudioService> => {
   const TrackPlayer = await import('react-native-track-player');
   const { default: TP, State, Capability, AppKilledPlaybackBehavior, RepeatMode } = TrackPlayer;
-
-  // Register playback service once (handles background playback)
-  if (!playbackServiceRegistered) {
-    const { PlaybackService } = await import('./playbackService');
-    TP.registerPlaybackService(() => PlaybackService);
-    playbackServiceRegistered = true;
-  }
 
   let isSetup = false;
 
@@ -103,8 +94,6 @@ const createRealAudioService = async (): Promise<AudioService> => {
         artist: 'Nicecream.fm',
         artwork: 'https://nicecream.fm/icon.png', // Add your app icon URL
         isLiveStream: true,
-        // For Icecast streams
-        type: TrackPlayer.TrackType.HLS,
       });
       await TP.play();
     },
