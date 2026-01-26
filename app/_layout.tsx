@@ -10,6 +10,7 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClient } from '@/api/queryClient';
+import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { getAudioService, isExpoGo } from '@/services/audioService';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
@@ -46,6 +47,9 @@ void SplashScreen.preventAutoHideAsync();
 export default function RootLayout(): React.ReactElement | null {
   const setPlayerSetup = useAppStore((state) => state.setPlayerSetup);
   const setTrackPlayerAvailable = useAudioStore((state) => state.setTrackPlayerAvailable);
+
+  // Start background image polling (40-second interval)
+  useBackgroundImage();
 
   const [fontsLoaded] = useFonts({
     'AlteHaasGrotesk-Bold': AlteHaasGroteskBold,

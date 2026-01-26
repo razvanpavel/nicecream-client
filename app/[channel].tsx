@@ -6,6 +6,7 @@ import { Platform, Pressable, View } from 'react-native';
 import { ChannelScreen } from '@/components/ChannelScreen';
 import { Text } from '@/components/ui';
 import { STREAMS } from '@/config/streams';
+import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 import { cn } from '@/utils/cn';
 
@@ -41,10 +42,19 @@ function getAdjacentChannels(currentId: ChannelId): { prev: ChannelId; next: Cha
 export default function ChannelRoute(): React.ReactElement {
   const { channel } = useLocalSearchParams<{ channel: string }>();
   const { status, currentStreamUrl, playStream, togglePlayback } = useAudioStore();
+  const setCurrentStreamIndex = useAppStore((state) => state.setCurrentStreamIndex);
 
   // Validate channel parameter
   const currentChannel: ChannelId = isChannelId(channel) ? channel : 'green';
   const stream = STREAMS.find((s) => s.id === currentChannel);
+
+  // Sync stream index for background image hook
+  useEffect(() => {
+    const index = VALID_CHANNELS.indexOf(currentChannel);
+    if (index !== -1) {
+      setCurrentStreamIndex(index);
+    }
+  }, [currentChannel, setCurrentStreamIndex]);
 
   // When channel changes, switch stream if already playing
   useEffect(() => {

@@ -4,6 +4,7 @@ import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager
 
 import { STREAMS, type StreamConfig, getDefaultStreamIndex } from '@/config/streams';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
 import { ChannelScreen } from './ChannelScreen';
@@ -37,10 +38,20 @@ function getInitialPage(): number {
   return streamIndex + 1; // +1 because page 0 is the fake Blue start
 }
 
+// Map page position to stream index
+// Pages: [Blue(0), Red(1), Green(2), Blue(3), Red(4)]
+// Streams: Red=0, Green=1, Blue=2
+function pageToStreamIndex(position: number): number {
+  if (position === 0 || position === 3) return 2; // Blue
+  if (position === 1 || position === 4) return 0; // Red
+  return 1; // Green (position === 2)
+}
+
 export function SwipePager(): React.ReactElement {
   const pagerRef = useRef<PagerView>(null);
   const haptics = useHaptics();
   const playStream = useAudioStore((state) => state.playStream);
+  const setCurrentStreamIndex = useAppStore((state) => state.setCurrentStreamIndex);
   const initialPage = getInitialPage();
   // Track programmatic jumps to avoid duplicate stream switches
   const isJumpingRef = useRef(false);
@@ -59,6 +70,10 @@ export function SwipePager(): React.ReactElement {
       if (Platform.OS !== 'web') {
         await haptics.medium();
       }
+
+      // Sync stream index for background image hook
+      const streamIndex = pageToStreamIndex(position);
+      setCurrentStreamIndex(streamIndex);
 
       // Handle infinite scroll boundaries
       if (position === 0) {
@@ -92,7 +107,7 @@ export function SwipePager(): React.ReactElement {
         void playStream(stream.url, stream.name);
       }
     },
-    [haptics, playStream]
+    [haptics, playStream, setCurrentStreamIndex]
   );
 
   return (

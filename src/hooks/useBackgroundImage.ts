@@ -1,65 +1,61 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { fetchAndPreloadBackground, type BackgroundCategory } from '@/api/backgrounds';
-import { STREAMS } from '@/config/streams';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, type ChannelId } from '@/store/appStore';
 
 const POLLING_INTERVAL_MS = 40000; // 40 seconds
+const CHANNELS: ChannelId[] = ['red', 'green', 'blue'];
 
 /**
- * Hook that polls the background API and updates the background image
- * Background changes based on the current channel/stream
+ * Hook that polls the background API and updates backgrounds for all channels
+ * Fetches backgrounds for all three channels to ensure they're pre-loaded
  */
 export function useBackgroundImage(): void {
-  const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
-  const setBackgroundImage = useAppStore((state) => state.setBackgroundImage);
-  const setBackgroundLoading = useAppStore((state) => state.setBackgroundLoading);
+  const setChannelBackground = useAppStore((state) => state.setChannelBackground);
+  const setChannelBackgroundLoading = useAppStore((state) => state.setChannelBackgroundLoading);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastChannelRef = useRef<BackgroundCategory | null>(null);
+  const initialFetchDoneRef = useRef(false);
 
-  const getCurrentChannel = useCallback((): BackgroundCategory => {
-    const stream = STREAMS[currentStreamIndex];
-    return (stream?.id ?? 'red') as BackgroundCategory;
-  }, [currentStreamIndex]);
+  const fetchBackgroundForChannel = useCallback(
+    async (channel: ChannelId): Promise<void> => {
+      setChannelBackgroundLoading(channel, true);
 
-  const fetchAndUpdateBackground = useCallback(async (): Promise<void> => {
-    const channel = getCurrentChannel();
+      try {
+        const background = await fetchAndPreloadBackground(channel as BackgroundCategory);
 
-    setBackgroundLoading(true);
+        setChannelBackground(channel, {
+          url: background.image,
+          author: background.author,
+          authorUrl: background.authorUrl,
+        });
+      } catch (error) {
+        console.error(`Failed to fetch background for ${channel}:`, error);
+        // Keep the current background on error
+      } finally {
+        setChannelBackgroundLoading(channel, false);
+      }
+    },
+    [setChannelBackground, setChannelBackgroundLoading]
+  );
 
-    try {
-      const background = await fetchAndPreloadBackground(channel);
+  const fetchAllBackgrounds = useCallback(async (): Promise<void> => {
+    // Fetch all channels in parallel
+    await Promise.all(CHANNELS.map((channel) => fetchBackgroundForChannel(channel)));
+  }, [fetchBackgroundForChannel]);
 
-      setBackgroundImage({
-        url: background.image,
-        author: background.author,
-        authorUrl: background.authorUrl,
-      });
-
-      lastChannelRef.current = channel;
-    } catch (error) {
-      console.error('Failed to fetch background image:', error);
-      // Keep the current background on error
-    } finally {
-      setBackgroundLoading(false);
-    }
-  }, [getCurrentChannel, setBackgroundImage, setBackgroundLoading]);
-
-  // Fetch immediately when channel changes
+  // Fetch backgrounds for all channels on mount
   useEffect(() => {
-    const currentChannel = getCurrentChannel();
-
-    // Only fetch if channel changed or we don't have a background yet
-    if (lastChannelRef.current !== currentChannel) {
-      void fetchAndUpdateBackground();
+    if (!initialFetchDoneRef.current) {
+      initialFetchDoneRef.current = true;
+      void fetchAllBackgrounds();
     }
-  }, [getCurrentChannel, fetchAndUpdateBackground]);
+  }, [fetchAllBackgrounds]);
 
-  // Set up polling interval
+  // Set up polling interval to refresh all backgrounds
   useEffect(() => {
     intervalRef.current = setInterval(() => {
-      void fetchAndUpdateBackground();
+      void fetchAllBackgrounds();
     }, POLLING_INTERVAL_MS);
 
     return (): void => {
@@ -68,5 +64,5 @@ export function useBackgroundImage(): void {
         intervalRef.current = null;
       }
     };
-  }, [fetchAndUpdateBackground]);
+  }, [fetchAllBackgrounds]);
 }

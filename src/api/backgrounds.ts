@@ -1,4 +1,6 @@
 import axios from 'axios';
+import { Image } from 'expo-image';
+import { Platform } from 'react-native';
 
 const BACKGROUND_API_URL = 'https://nicecream-work.tcrhd.net/background-api.php';
 
@@ -26,22 +28,21 @@ export async function fetchBackground(category: BackgroundCategory): Promise<Bac
  * Preload an image to ensure it's cached before displaying
  * @param imageUrl - The URL of the image to preload
  */
-export function preloadImage(imageUrl: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // For React Native, we'd use Image.prefetch
-    // For web, we create a new Image object
-    if (typeof Image !== 'undefined') {
-      const img = new Image();
+export async function preloadImage(imageUrl: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    // For web, use native Image constructor
+    return new Promise((resolve, reject) => {
+      const img = new window.Image();
       img.onload = (): void => {
-        resolve(undefined);
+        resolve();
       };
       img.onerror = reject;
       img.src = imageUrl;
-    } else {
-      // Fallback for environments without Image constructor
-      resolve();
-    }
-  });
+    });
+  } else {
+    // For native (iOS/Android), use expo-image prefetch
+    await Image.prefetch(imageUrl);
+  }
 }
 
 /**
