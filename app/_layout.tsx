@@ -1,43 +1,55 @@
-// Suppress warnings FIRST before any other imports trigger them
-import { LogBox, Platform } from 'react-native';
-LogBox.ignoreLogs([
-  'SafeAreaView has been deprecated',
-  'Invariant Violation: Your JavaScript code tried to access a native module',
-]);
-
-// Register playback service at module level (must happen before any TrackPlayer methods)
-if (Platform.OS !== 'web') {
-  const TrackPlayer = require('react-native-track-player').default;
-  const { PlaybackService } = require('@/services/playbackService');
-  TrackPlayer.registerPlaybackService(() => PlaybackService);
-}
-
 import { QueryClientProvider } from '@tanstack/react-query';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { LogBox, Platform } from 'react-native';
 import 'react-native-reanimated';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClient } from '@/api/queryClient';
 import { getAudioService, isExpoGo } from '@/services/audioService';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
+import AlteHaasGroteskBold from '../assets/fonts/AlteHaasGroteskBold.ttf';
+import AlteHaasGroteskRegular from '../assets/fonts/AlteHaasGroteskRegular.ttf';
 import '../global.css';
 
+// Suppress warnings
+LogBox.ignoreLogs([
+  'SafeAreaView has been deprecated',
+  'Invariant Violation: Your JavaScript code tried to access a native module',
+]);
+
+// Register playback service at module level (must happen before any TrackPlayer methods)
+// Skip in Expo Go since native modules aren't available
+const isExpoGoRuntime = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+function registerPlaybackService(): void {
+  if (Platform.OS !== 'web' && !isExpoGoRuntime) {
+    void import('react-native-track-player').then((TrackPlayer) => {
+      void import('@/services/playbackService').then(({ PlaybackService }) => {
+        TrackPlayer.default.registerPlaybackService(() => PlaybackService);
+      });
+    });
+  }
+}
+
+registerPlaybackService();
+
 // Keep splash screen visible while loading fonts
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout(): React.ReactElement | null {
   const setPlayerSetup = useAppStore((state) => state.setPlayerSetup);
   const setTrackPlayerAvailable = useAudioStore((state) => state.setTrackPlayerAvailable);
 
   const [fontsLoaded] = useFonts({
-    'AlteHaasGrotesk-Bold': require('../assets/fonts/AlteHaasGroteskBold.ttf'),
-    'AlteHaasGrotesk-Regular': require('../assets/fonts/AlteHaasGroteskRegular.ttf'),
+    'AlteHaasGrotesk-Bold': AlteHaasGroteskBold,
+    'AlteHaasGrotesk-Regular': AlteHaasGroteskRegular,
   });
 
   useEffect(() => {

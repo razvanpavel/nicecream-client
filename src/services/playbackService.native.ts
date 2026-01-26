@@ -6,7 +6,7 @@ import { useAudioStore } from '@/store/audioStore';
  * Playback service that runs in the background
  * This handles remote controls (lock screen, notification, headphones, etc.)
  */
-export async function PlaybackService(): Promise<void> {
+export function PlaybackService(): void {
   // Remote play (from notification, lock screen, headphones)
   TrackPlayer.addEventListener(Event.RemotePlay, () => {
     void TrackPlayer.play();
@@ -39,12 +39,16 @@ export async function PlaybackService(): Promise<void> {
   });
 
   // Sync playback state changes to Zustand store
+  // Note: 'playing' state is handled by audioStore.playStream to prevent race conditions
   TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
     const store = useAudioStore.getState();
 
     switch (event.state) {
       case State.Playing:
-        if (store.status !== 'playing') {
+        // Don't set 'playing' here - let audioStore.playStream handle it
+        // This prevents race conditions with the store action
+        // Only update if we're coming from paused (resume from remote control)
+        if (store.status === 'paused') {
           useAudioStore.setState({ status: 'playing' });
         }
         break;
@@ -76,23 +80,23 @@ export async function PlaybackService(): Promise<void> {
     console.error('Playback error:', event);
     useAudioStore.setState({
       status: 'error',
-      error: event.message ?? 'Playback failed',
+      error: event.message,
     });
   });
 
   // Handle metadata updates (for Icecast streams that send track info)
-  TrackPlayer.addEventListener(Event.PlaybackMetadataReceived, (event) => {
-    const metadata: { title?: string; artist?: string } = {};
+  TrackPlayer.addEventListener(Event.MetadataCommonReceived, (event) => {
+    const streamMetadata: { title?: string; artist?: string } = {};
 
-    if (event.title != null) {
-      metadata.title = event.title;
+    if (event.metadata.title !== undefined) {
+      streamMetadata.title = event.metadata.title;
     }
-    if (event.artist != null) {
-      metadata.artist = event.artist;
+    if (event.metadata.artist !== undefined) {
+      streamMetadata.artist = event.metadata.artist;
     }
 
-    if (Object.keys(metadata).length > 0) {
-      useAudioStore.setState({ streamMetadata: metadata });
+    if (Object.keys(streamMetadata).length > 0) {
+      useAudioStore.setState({ streamMetadata });
     }
   });
 }

@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { STREAMS, getDefaultStreamIndex } from '@/config/streams';
 import { useAudioStore } from '@/store/audioStore';
+import { cn } from '@/utils/cn';
 
 import { ChannelScreen } from './ChannelScreen';
 import { Text } from './ui';
@@ -44,14 +45,18 @@ export function SwipePager(): React.ReactElement {
 
       {/* Navigation Arrows */}
       <Pressable
-        onPress={() => goToIndex(currentIndex - 1)}
+        onPress={(): void => {
+          goToIndex(currentIndex - 1);
+        }}
         className="absolute left-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full bg-white/20 active:bg-white/40"
       >
         <Text className="text-xl text-white">←</Text>
       </Pressable>
 
       <Pressable
-        onPress={() => goToIndex(currentIndex + 1)}
+        onPress={(): void => {
+          goToIndex(currentIndex + 1);
+        }}
         className="absolute right-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full bg-white/20 active:bg-white/40"
       >
         <Text className="text-xl text-white">→</Text>
@@ -60,12 +65,17 @@ export function SwipePager(): React.ReactElement {
       {/* Dots Indicator */}
       <View className="absolute bottom-10 left-0 right-0 flex-row justify-center gap-2">
         {STREAMS.map((stream, index) => (
-          <Pressable key={stream.id} onPress={() => goToIndex(index)}>
+          <Pressable
+            key={stream.id}
+            onPress={(): void => {
+              goToIndex(index);
+            }}
+          >
             <View
-              className="h-2.5 w-2.5 rounded-full"
-              style={{
-                backgroundColor: index === currentIndex ? 'white' : 'rgba(255,255,255,0.4)',
-              }}
+              className={cn(
+                'h-2.5 w-2.5 rounded-full',
+                index === currentIndex ? 'bg-white' : 'bg-white/40'
+              )}
             />
           </Pressable>
         ))}

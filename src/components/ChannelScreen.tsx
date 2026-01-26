@@ -100,12 +100,8 @@ export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElemen
       {/* Volume/Wave Animation (when playing) */}
       {isPlaying && (
         <View className="mt-6 flex-row items-end justify-center gap-1">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <View
-              key={i}
-              className="w-1 rounded-sm bg-white/60"
-              style={{ height: 8 + Math.random() * 16 }}
-            />
+          {[12, 20, 16, 24, 14].map((height, i) => (
+            <View key={i} className="w-1 rounded-sm bg-white/60" style={{ height }} />
           ))}
         </View>
       )}

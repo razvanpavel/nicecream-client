@@ -2,6 +2,9 @@ import { create } from 'zustand';
 
 import { getAudioService, isExpoGo } from '@/services/audioService';
 
+// Request counter for cancelling stale play requests
+let currentPlayRequestId = 0;
+
 type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
 interface StreamMetadata {
@@ -28,6 +31,7 @@ interface AudioState {
   setStreamMetadata: (metadata: StreamMetadata) => void;
   setTrackPlayerAvailable: (available: boolean) => void;
   setUserInteracted: () => void;
+  setError: (message: string) => void;
   clearError: () => void;
 }
 
@@ -48,6 +52,9 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       return;
     }
 
+    // Increment request ID to cancel any in-flight requests
+    const thisRequestId = ++currentPlayRequestId;
+
     // Update state to loading
     set({
       status: 'loading',
@@ -60,6 +67,12 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     if (isExpoGo) {
       // Simulate loading delay for Expo Go
       await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Check if this request was superseded
+      if (thisRequestId !== currentPlayRequestId) {
+        return;
+      }
+
       console.log(`[Expo Go] Would play: ${stationName}`);
       set({ status: 'playing' });
       return;
@@ -68,8 +81,19 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     try {
       const audioService = await getAudioService();
       await audioService.play(url, stationName);
+
+      // Check if this request was superseded
+      if (thisRequestId !== currentPlayRequestId) {
+        return;
+      }
+
       set({ status: 'playing' });
     } catch (error) {
+      // Check if this request was superseded
+      if (thisRequestId !== currentPlayRequestId) {
+        return;
+      }
+
       const errorMessage = error instanceof Error ? error.message : 'Failed to play stream';
       console.error('Failed to play stream:', error);
       set({ status: 'error', error: errorMessage });
@@ -139,6 +163,10 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
   setUserInteracted: (): void => {
     set({ hasUserInteracted: true });
+  },
+
+  setError: (message: string): void => {
+    set({ status: 'error', error: message });
   },
 
   clearError: (): void => {

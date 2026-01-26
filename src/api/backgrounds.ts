@@ -32,7 +32,9 @@ export function preloadImage(imageUrl: string): Promise<void> {
     // For web, we create a new Image object
     if (typeof Image !== 'undefined') {
       const img = new Image();
-      img.onload = (): void => resolve();
+      img.onload = (): void => {
+        resolve(undefined);
+      };
       img.onerror = reject;
       img.src = imageUrl;
     } else {

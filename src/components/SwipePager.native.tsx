@@ -9,14 +9,26 @@ import { useAudioStore } from '@/store/audioStore';
 import { ChannelScreen } from './ChannelScreen';
 
 // For infinite scroll: [Blue, Red, Green, Blue, Red]
-// We use non-null assertions here because we know STREAMS has 3 elements
-const INFINITE_PAGES: StreamConfig[] = [
-  STREAMS[2]!, // Blue (fake start) - page 0
-  STREAMS[0]!, // Red - page 1
-  STREAMS[1]!, // Green - page 2
-  STREAMS[2]!, // Blue - page 3
-  STREAMS[0]!, // Red (fake end) - page 4
-];
+// Build pages using indices - STREAMS array has exactly 3 elements [red, green, blue]
+function buildInfinitePages(): StreamConfig[] {
+  const red = STREAMS[0];
+  const green = STREAMS[1];
+  const blue = STREAMS[2];
+
+  if (red === undefined || green === undefined || blue === undefined) {
+    throw new Error('STREAMS array must have exactly 3 elements');
+  }
+
+  return [
+    blue, // Blue (fake start) - page 0
+    red, // Red - page 1
+    green, // Green - page 2
+    blue, // Blue - page 3
+    red, // Red (fake end) - page 4
+  ];
+}
+
+const INFINITE_PAGES: StreamConfig[] = buildInfinitePages();
 
 // Map stream index to page index in INFINITE_PAGES
 // Red (0) → page 1, Green (1) → page 2, Blue (2) → page 3
@@ -59,13 +71,15 @@ export function SwipePager(): React.ReactElement {
   return (
     <PagerView
       ref={pagerRef}
-      style={{ flex: 1 }}
+      className="flex-1"
       initialPage={initialPage}
-      onPageSelected={(e) => void handlePageSelected(e)}
+      onPageSelected={(e) => {
+        void handlePageSelected(e);
+      }}
       overdrag={true}
     >
       {INFINITE_PAGES.map((stream, index) => (
-        <View key={`${stream.id}-${String(index)}`} style={{ flex: 1 }}>
+        <View key={`${stream.id}-${String(index)}`} className="flex-1">
           <ChannelScreen stream={stream} />
         </View>
       ))}

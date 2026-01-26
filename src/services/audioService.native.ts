@@ -1,7 +1,7 @@
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 // Check if running in Expo Go
-const isExpoGo = Constants.appOwnership === 'expo';
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 interface AudioService {
   isAvailable: boolean;
@@ -15,19 +15,22 @@ interface AudioService {
 // Mock service for Expo Go
 const mockAudioService: AudioService = {
   isAvailable: false,
-  setup: async () => false,
-  play: async (url, title) => {
+  setup: (): Promise<boolean> => Promise.resolve(false),
+  play: (url: string, title: string): Promise<void> => {
     console.log(`[Mock Audio] Would play: ${title} - ${url}`);
+    return Promise.resolve();
   },
-  pause: async () => {
+  pause: (): Promise<void> => {
     console.log('[Mock Audio] Would pause');
+    return Promise.resolve();
   },
-  stop: async () => {
+  stop: (): Promise<void> => {
     console.log('[Mock Audio] Would stop');
+    return Promise.resolve();
   },
-  togglePlayback: async () => {
+  togglePlayback: (): Promise<boolean> => {
     console.log('[Mock Audio] Would toggle playback');
-    return false;
+    return Promise.resolve(false);
   },
 };
 
@@ -41,7 +44,7 @@ const createRealAudioService = async (): Promise<AudioService> => {
   return {
     isAvailable: true,
 
-    setup: async () => {
+    setup: async (): Promise<boolean> => {
       if (isSetup) return true;
 
       try {
@@ -84,28 +87,40 @@ const createRealAudioService = async (): Promise<AudioService> => {
       return isSetup;
     },
 
-    play: async (url, title) => {
+    play: async (url: string, title: string): Promise<void> => {
+      // Check current state and pause gracefully if playing
+      const currentState = await TP.getPlaybackState();
+      if (currentState.state === State.Playing || currentState.state === State.Buffering) {
+        await TP.pause();
+        // Small delay to allow audio hardware to flush buffers
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      // Reset queue
       await TP.reset();
+
+      // Add new track and play
       await TP.add({
-        id: 'stream',
+        id: 'live-stream',
         url,
         title,
         artist: 'Nicecream.fm',
-        artwork: 'https://nicecream.fm/icon.png', // Add your app icon URL
+        artwork: 'https://nicecream.fm/icon.png',
         isLiveStream: true,
       });
+
       await TP.play();
     },
 
-    pause: async () => {
+    pause: async (): Promise<void> => {
       await TP.pause();
     },
 
-    stop: async () => {
+    stop: async (): Promise<void> => {
       await TP.stop();
     },
 
-    togglePlayback: async () => {
+    togglePlayback: async (): Promise<boolean> => {
       const state = await TP.getPlaybackState();
       if (state.state === State.Playing) {
         await TP.pause();
