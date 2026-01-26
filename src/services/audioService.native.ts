@@ -49,69 +49,77 @@ const createRealAudioService = async (): Promise<AudioService> => {
   // Request ID to prevent race conditions during rapid stream switching
   let currentPlayRequestId = 0;
 
+  // Extract setup logic so it can be called from play()
+  const doSetup = async (): Promise<boolean> => {
+    // Return existing setup promise if in progress
+    if (setupPromise !== null) {
+      return setupPromise;
+    }
+
+    if (isSetup) {
+      return true;
+    }
+
+    setupPromise = (async (): Promise<boolean> => {
+      try {
+        // Check if already setup
+        await TP.getActiveTrack();
+        isSetup = true;
+      } catch {
+        // Setup the player
+        await TP.setupPlayer({
+          // Buffer settings for streaming
+          minBuffer: 15,
+          maxBuffer: 50,
+          playBuffer: 2,
+          backBuffer: 0,
+        });
+
+        // Configure player options for background playback
+        await TP.updateOptions({
+          // Android-specific: Keep playing when app is killed
+          android: {
+            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
+          },
+
+          // Capabilities shown in notification and lock screen
+          capabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+
+          // Compact notification capabilities (Android)
+          compactCapabilities: [Capability.Play, Capability.Pause],
+
+          // Notification configuration
+          notificationCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+
+          // Progress bar in notification (disabled for live streams)
+          progressUpdateEventInterval: 0,
+        });
+
+        await TP.setRepeatMode(RepeatMode.Off);
+        isSetup = true;
+      }
+      return isSetup;
+    })();
+
+    try {
+      return await setupPromise;
+    } finally {
+      setupPromise = null;
+    }
+  };
+
   return {
     isAvailable: true,
 
-    setup: async (): Promise<boolean> => {
-      // Return existing setup promise if in progress
-      if (setupPromise !== null) {
-        return setupPromise;
-      }
-
-      if (isSetup) {
-        return true;
-      }
-
-      setupPromise = (async (): Promise<boolean> => {
-        try {
-          // Check if already setup
-          await TP.getActiveTrack();
-          isSetup = true;
-        } catch {
-          // Setup the player
-          await TP.setupPlayer({
-            // Buffer settings for streaming
-            minBuffer: 15,
-            maxBuffer: 50,
-            playBuffer: 2,
-            backBuffer: 0,
-          });
-
-          // Configure player options for background playback
-          await TP.updateOptions({
-            // Android-specific: Keep playing when app is killed
-            android: {
-              appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
-            },
-
-            // Capabilities shown in notification and lock screen
-            capabilities: [Capability.Play, Capability.Pause, Capability.Stop],
-
-            // Compact notification capabilities (Android)
-            compactCapabilities: [Capability.Play, Capability.Pause],
-
-            // Notification configuration
-            notificationCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
-
-            // Progress bar in notification (disabled for live streams)
-            progressUpdateEventInterval: 0,
-          });
-
-          await TP.setRepeatMode(RepeatMode.Off);
-          isSetup = true;
-        }
-        return isSetup;
-      })();
-
-      try {
-        return await setupPromise;
-      } finally {
-        setupPromise = null;
-      }
-    },
+    setup: doSetup,
 
     play: async (url: string, title: string): Promise<void> => {
       const thisRequestId = ++currentPlayRequestId;
+
+      // Ensure TrackPlayer is initialized before attempting playback
+      if (!isSetup) {
+        await doSetup();
+      }
 
       // Check current state and pause gracefully if playing
       const currentState = await TP.getPlaybackState();
@@ -207,6 +215,8 @@ export async function getAudioService(): Promise<AudioService> {
 
   try {
     audioServiceInstance = await createRealAudioService();
+    // Initialize TrackPlayer before returning
+    await audioServiceInstance.setup();
     return audioServiceInstance;
   } catch (error) {
     console.log('Failed to initialize audio service:', error);
