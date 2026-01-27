@@ -5,6 +5,9 @@ import { getAudioService, isExpoGo } from '@/services/audioService';
 // Request counter for cancelling stale play requests
 let currentPlayRequestId = 0;
 
+// AbortController for cancelling in-flight play requests across service boundary
+let currentPlayAbortController: AbortController | null = null;
+
 // Transition timeout to prevent deadlock
 let transitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -172,6 +175,13 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       return;
     }
 
+    // Abort any in-flight play request
+    if (currentPlayAbortController !== null) {
+      currentPlayAbortController.abort();
+    }
+    currentPlayAbortController = new AbortController();
+    const signal = currentPlayAbortController.signal;
+
     // Increment request ID to cancel any in-flight requests
     const thisRequestId = ++currentPlayRequestId;
 
@@ -231,7 +241,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         }
 
         const audioService = await getAudioService();
-        await audioService.play(url, stationName);
+        await audioService.play(url, stationName, signal);
 
         // Check if this request was superseded
         if (thisRequestId !== currentPlayRequestId) {

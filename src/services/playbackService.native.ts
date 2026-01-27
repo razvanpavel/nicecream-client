@@ -2,6 +2,17 @@ import TrackPlayer, { Event, State } from 'react-native-track-player';
 
 import { useAudioStore } from '@/store/audioStore';
 
+// Fix 5: Buffering timeout — if buffering persists >5s while status is 'playing',
+// show loading spinner so the UI doesn't appear stuck.
+let bufferingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+function clearBufferingTimeout(): void {
+  if (bufferingTimeoutId !== null) {
+    clearTimeout(bufferingTimeoutId);
+    bufferingTimeoutId = null;
+  }
+}
+
 /**
  * Playback service that runs in the background
  * This handles remote controls (lock screen, notification, headphones, etc.)
@@ -9,32 +20,46 @@ import { useAudioStore } from '@/store/audioStore';
 export function PlaybackService(): void {
   // Remote play (from notification, lock screen, headphones)
   TrackPlayer.addEventListener(Event.RemotePlay, () => {
-    void TrackPlayer.play();
+    TrackPlayer.play().catch((e: unknown) => {
+      console.error('[PlaybackService] RemotePlay failed:', e);
+    });
   });
 
   // Remote pause
   TrackPlayer.addEventListener(Event.RemotePause, () => {
-    void TrackPlayer.pause();
+    TrackPlayer.pause().catch((e: unknown) => {
+      console.error('[PlaybackService] RemotePause failed:', e);
+    });
   });
 
   // Remote stop
   TrackPlayer.addEventListener(Event.RemoteStop, () => {
-    void TrackPlayer.stop();
+    TrackPlayer.stop().catch((e: unknown) => {
+      console.error('[PlaybackService] RemoteStop failed:', e);
+    });
   });
 
   // Remote seek (for scrubbing in notification)
   TrackPlayer.addEventListener(Event.RemoteSeek, (event) => {
-    void TrackPlayer.seekTo(event.position);
+    TrackPlayer.seekTo(event.position).catch((e: unknown) => {
+      console.error('[PlaybackService] RemoteSeek failed:', e);
+    });
   });
 
   // Handle headphone disconnect - pause playback
   TrackPlayer.addEventListener(Event.RemoteDuck, (event) => {
     if (event.paused) {
-      void TrackPlayer.pause();
+      TrackPlayer.pause().catch((e: unknown) => {
+        console.error('[PlaybackService] RemoteDuck pause failed:', e);
+      });
     } else if (event.permanent) {
-      void TrackPlayer.stop();
+      TrackPlayer.stop().catch((e: unknown) => {
+        console.error('[PlaybackService] RemoteDuck stop failed:', e);
+      });
     } else {
-      void TrackPlayer.play();
+      TrackPlayer.play().catch((e: unknown) => {
+        console.error('[PlaybackService] RemoteDuck play failed:', e);
+      });
     }
   });
 
@@ -42,6 +67,12 @@ export function PlaybackService(): void {
   // Note: During controlled transitions (isTransitioning=true), we ignore most state changes
   // to prevent the store from being overwritten during stream switches
   TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
+    console.log(
+      '[PlaybackService] PlaybackState event:',
+      event.state,
+      'transitioning:',
+      useAudioStore.getState().isTransitioning
+    );
     const store = useAudioStore.getState();
 
     // During controlled transitions, handle state changes appropriately
@@ -49,7 +80,12 @@ export function PlaybackService(): void {
     if (store.isTransitioning) {
       switch (event.state) {
         case State.Playing:
-          useAudioStore.setState({ status: 'playing', isTransitioning: false });
+        case State.Buffering:
+        case State.Loading:
+        case State.Ready:
+          // Expected during transition — audioStore.playStream() owns the final state.
+          // Do NOT clear isTransitioning here; the polling loop in audioService.play()
+          // will confirm stable playback and audioStore will clear it.
           break;
         case State.Error:
           useAudioStore.setState({
@@ -58,18 +94,11 @@ export function PlaybackService(): void {
             isTransitioning: false,
           });
           break;
-        case State.Buffering:
-        case State.Loading:
-          // Expected during transition - keep status as 'loading'
-          break;
         case State.Paused:
-          // User might have quickly toggled - allow through
-          useAudioStore.setState({ status: 'paused', isTransitioning: false });
-          break;
         case State.Stopped:
         case State.None:
-          // Unexpected during transition - log but don't change state
-          console.warn('[PlaybackService] Unexpected stop during transition');
+          // Expected during transition cleanup (pause → reset → stopped → none).
+          // Do NOT clear isTransitioning or update status — audioStore.playStream() owns it.
           break;
       }
       return;
@@ -77,31 +106,53 @@ export function PlaybackService(): void {
 
     switch (event.state) {
       case State.Playing:
-        // Update to playing from any non-playing state
+        clearBufferingTimeout();
         if (store.status !== 'playing') {
           useAudioStore.setState({ status: 'playing' });
         }
         break;
       case State.Paused:
+        clearBufferingTimeout();
         if (store.status !== 'paused') {
+          useAudioStore.setState({ status: 'paused' });
+        }
+        break;
+      case State.Ready:
+        clearBufferingTimeout();
+        // Ready = track loaded, playWhenReady is false.
+        // Treat like paused — the player is idle with a track loaded.
+        if (store.status !== 'paused' && store.status !== 'idle') {
           useAudioStore.setState({ status: 'paused' });
         }
         break;
       case State.Stopped:
       case State.None:
+        clearBufferingTimeout();
         if (store.status !== 'idle') {
           useAudioStore.setState({ status: 'idle' });
         }
         break;
       case State.Buffering:
       case State.Loading:
-        // Only set loading if we're coming from idle - not from playing
-        // Buffering during playback is normal for live streams
+        // Only set loading if we're coming from idle
         if (store.status === 'idle') {
           useAudioStore.setState({ status: 'loading' });
         }
+        // Fix 5: If buffering during active playback, start a timeout.
+        // If buffering persists >5s, show loading so the UI doesn't appear stuck.
+        if (store.status === 'playing') {
+          clearBufferingTimeout();
+          bufferingTimeoutId = setTimeout(() => {
+            const current = useAudioStore.getState();
+            if (current.status === 'playing' && !current.isTransitioning) {
+              useAudioStore.setState({ status: 'loading' });
+            }
+            bufferingTimeoutId = null;
+          }, 5000);
+        }
         break;
       case State.Error:
+        clearBufferingTimeout();
         useAudioStore.setState({
           status: 'error',
           error: { message: 'Playback error', category: 'unknown', isRetryable: true },
@@ -112,7 +163,7 @@ export function PlaybackService(): void {
 
   // Handle playback errors
   TrackPlayer.addEventListener(Event.PlaybackError, (event) => {
-    console.error('Playback error:', event);
+    console.error('[PlaybackService] PlaybackError:', event);
     useAudioStore.setState({
       status: 'error',
       error: {

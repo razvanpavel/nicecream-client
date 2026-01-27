@@ -3,7 +3,7 @@
 interface AudioService {
   isAvailable: boolean;
   setup: () => Promise<boolean>;
-  play: (url: string, title: string) => Promise<void>;
+  play: (url: string, title: string, signal?: AbortSignal) => Promise<void>;
   pause: () => Promise<void>;
   stop: () => Promise<void>;
   togglePlayback: () => Promise<boolean>;
@@ -139,60 +139,65 @@ const webAudioService: AudioService = {
   },
 
   // P0 Fix: Request ID to prevent stale request corruption
-  play: async (url: string, _title: string): Promise<void> => {
+  play: async (url: string, _title: string, signal?: AbortSignal): Promise<void> => {
     // Increment request ID to cancel any in-flight requests
     const thisRequestId = ++currentPlayRequestId;
+
+    const isCancelled = (): boolean =>
+      signal !== undefined ? signal.aborted : thisRequestId !== currentPlayRequestId;
 
     if (audioElement === null) {
       await webAudioService.setup();
     }
 
     // Check if superseded after async setup
-    if (thisRequestId !== currentPlayRequestId) {
+    if (isCancelled()) {
       return;
     }
 
-    if (audioElement !== null) {
-      // Stop existing playback cleanly
-      if (!audioElement.paused) {
-        audioElement.pause();
-      }
+    // Snapshot audioElement to guard against destroy() nullifying it mid-play
+    const el = audioElement;
+    if (el === null) return;
 
-      // Check if superseded after pause
-      if (thisRequestId !== currentPlayRequestId) {
+    // Stop existing playback cleanly
+    if (!el.paused) {
+      el.pause();
+    }
+
+    // Check if superseded after pause
+    if (isCancelled()) {
+      return;
+    }
+
+    // Clear and reset
+    el.src = '';
+    el.load();
+
+    // Set new source
+    el.src = url;
+
+    try {
+      await el.play();
+
+      // Check if superseded after play started
+      if (isCancelled()) {
+        // Stop this now-stale playback
+        el.pause();
         return;
       }
 
-      // Clear and reset
-      audioElement.src = '';
-      audioElement.load();
-
-      // Set new source
-      audioElement.src = url;
-
-      try {
-        await audioElement.play();
-
-        // Check if superseded after play started
-        if (thisRequestId !== currentPlayRequestId) {
-          // Stop this now-stale playback
-          audioElement.pause();
-          return;
-        }
-
-        isPlaying = true;
-      } catch (e) {
-        // Check if superseded - don't throw errors for stale requests
-        if (thisRequestId !== currentPlayRequestId) {
-          return;
-        }
-
-        if (e instanceof Error && e.name === 'NotAllowedError') {
-          // Autoplay blocked - user interaction needed
-          throw new Error('Click play to start audio');
-        }
-        throw e;
+      isPlaying = true;
+    } catch (e) {
+      // Check if superseded - don't throw errors for stale requests
+      if (isCancelled()) {
+        return;
       }
+
+      if (e instanceof Error && e.name === 'NotAllowedError') {
+        // Autoplay blocked - user interaction needed
+        throw new Error('Click play to start audio');
+      }
+      throw e;
     }
   },
 

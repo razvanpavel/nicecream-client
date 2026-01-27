@@ -6,7 +6,7 @@ const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreCl
 interface AudioService {
   isAvailable: boolean;
   setup: () => Promise<boolean>;
-  play: (url: string, title: string) => Promise<void>;
+  play: (url: string, title: string, signal?: AbortSignal) => Promise<void>;
   pause: () => Promise<void>;
   stop: () => Promise<void>;
   togglePlayback: () => Promise<boolean>;
@@ -40,42 +40,67 @@ const mockAudioService: AudioService = {
 
 // Real service using TrackPlayer
 const createRealAudioService = async (): Promise<AudioService> => {
+  console.log('[AudioService] Creating real audio service...');
   const TrackPlayer = await import('react-native-track-player');
-  const { default: TP, State, Capability, AppKilledPlaybackBehavior, RepeatMode } = TrackPlayer;
+  const {
+    default: TP,
+    State,
+    Capability,
+    AppKilledPlaybackBehavior,
+    RepeatMode,
+    IOSCategory,
+    IOSCategoryMode,
+    IOSCategoryOptions,
+  } = TrackPlayer;
 
   let isSetup = false;
   // P0 Fix: Setup promise deduplication
   let setupPromise: Promise<boolean> | null = null;
-  // Request ID to prevent race conditions during rapid stream switching
+  // Fallback request ID for direct play() calls without AbortSignal
   let currentPlayRequestId = 0;
 
   // Extract setup logic so it can be called from play()
   const doSetup = async (): Promise<boolean> => {
     // Return existing setup promise if in progress
     if (setupPromise !== null) {
+      console.log('[AudioService] Setup already in progress, returning existing promise');
       return setupPromise;
     }
 
     if (isSetup) {
+      console.log('[AudioService] Already setup');
       return true;
     }
+
+    console.log('[AudioService] Starting setup...');
 
     setupPromise = (async (): Promise<boolean> => {
       try {
         // Check if already setup
-        await TP.getActiveTrack();
+        const existingTrack = await TP.getActiveTrack();
+        console.log('[AudioService] Player already initialized, active track:', existingTrack?.id);
         isSetup = true;
       } catch {
+        console.log('[AudioService] Player not initialized, calling setupPlayer...');
         // Setup the player
         await TP.setupPlayer({
-          // Buffer settings for streaming
+          // iOS audio session — activates Playback category on cold start
+          iosCategory: IOSCategory.Playback,
+          iosCategoryMode: IOSCategoryMode.Default,
+          iosCategoryOptions: [
+            IOSCategoryOptions.AllowAirPlay,
+            IOSCategoryOptions.AllowBluetoothA2DP,
+          ],
+
+          // Buffer settings (maxBuffer/playBuffer/backBuffer are Android-only)
           minBuffer: 15,
           maxBuffer: 50,
           playBuffer: 2,
           backBuffer: 0,
-          // Wait for initial playback buffer before starting audio output
+
           autoHandleInterruptions: true,
         });
+        console.log('[AudioService] setupPlayer complete');
 
         // Configure player options for background playback
         await TP.updateOptions({
@@ -96,15 +121,16 @@ const createRealAudioService = async (): Promise<AudioService> => {
           // Progress bar in notification (disabled for live streams)
           progressUpdateEventInterval: 0,
         });
+        console.log('[AudioService] updateOptions complete');
 
         await TP.setRepeatMode(RepeatMode.Off);
+        console.log('[AudioService] setRepeatMode complete');
 
         // Brief yield to let the native player fully initialize its audio session.
-        // This prevents the first play() call from firing before the audio pipeline
-        // is ready, which on some iOS devices causes a silent first playback.
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         isSetup = true;
+        console.log('[AudioService] Setup complete');
       }
       return isSetup;
     })();
@@ -121,104 +147,116 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
     setup: doSetup,
 
-    play: async (url: string, title: string): Promise<void> => {
+    play: async (url: string, title: string, signal?: AbortSignal): Promise<void> => {
       const thisRequestId = ++currentPlayRequestId;
+      console.log(`[AudioService] play() called — request #${String(thisRequestId)}, url=${url}`);
+
+      // Use signal if provided, otherwise fall back to request ID comparison
+      const isCancelled = (): boolean =>
+        signal !== undefined ? signal.aborted : thisRequestId !== currentPlayRequestId;
 
       // Ensure TrackPlayer is initialized before attempting playback
       if (!isSetup) {
+        console.log('[AudioService] Not setup yet, running doSetup from play()');
         await doSetup();
       }
 
       // Check if superseded during setup
-      if (thisRequestId !== currentPlayRequestId) {
+      if (isCancelled()) {
         console.log('[AudioService] Play request superseded during setup');
         return;
       }
 
-      // Check current state and pause gracefully if playing
-      const currentState = await TP.getPlaybackState();
-
-      if (thisRequestId !== currentPlayRequestId) {
-        return;
-      }
-
-      if (currentState.state === State.Playing || currentState.state === State.Buffering) {
-        await TP.pause();
-        // Delay to allow audio hardware to flush buffers
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
-
-      if (thisRequestId !== currentPlayRequestId) {
-        return;
-      }
-
-      // Stop completely before reset to ensure clean state
-      await TP.stop();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      if (thisRequestId !== currentPlayRequestId) {
-        return;
-      }
-
-      // Reset queue
-      await TP.reset();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      if (thisRequestId !== currentPlayRequestId) {
-        return;
-      }
-
-      // Add new track and play
-      await TP.add({
+      const track = {
         id: 'live-stream',
         url,
         title,
         artist: 'Nicecream.fm',
         artwork: 'https://nicecream.fm/icon.png',
         isLiveStream: true,
-      });
+      };
 
-      if (thisRequestId !== currentPlayRequestId) {
+      // Check if a track is already loaded (i.e. switching streams, not cold start)
+      const activeTrack = await TP.getActiveTrack();
+
+      if (isCancelled()) {
         return;
       }
 
+      if (activeTrack != null) {
+        // Stream switch: use load() to replace the track without tearing down
+        // the audio session. reset() destroys the CoreAudio IO context, which
+        // on iOS Simulator causes the HAL proxy to break permanently.
+        console.log('[AudioService] Stream switch — using load() to replace track...');
+        await TP.load(track);
+      } else {
+        // Cold start: no track loaded yet, use add()
+        console.log('[AudioService] Cold start — adding track...');
+        await TP.add(track);
+      }
+
+      if (isCancelled()) {
+        return;
+      }
+
+      console.log('[AudioService] Calling TP.play()...');
       await TP.play();
 
-      // Wait for playback to actually start (with timeout)
+      // Wait for Playing state with retry on Ready (up to 10s).
+      // On iOS cold start, play() can fail to stick — re-issue on Ready.
       const startTime = Date.now();
-      const PLAY_TIMEOUT = 5000; // 5 seconds
+      const PLAY_TIMEOUT = 10000;
+      let playRetries = 0;
+      const MAX_PLAY_RETRIES = 5;
 
       while (Date.now() - startTime < PLAY_TIMEOUT) {
-        if (thisRequestId !== currentPlayRequestId) {
-          return; // Superseded
+        if (isCancelled()) {
+          return;
         }
 
         const state = await TP.getPlaybackState();
+
         if (state.state === State.Playing) {
-          return; // Success - playback confirmed!
+          console.log(
+            `[AudioService] Playback confirmed after ${String(Date.now() - startTime)}ms (retries: ${String(playRetries)})`
+          );
+          return;
         }
+
         if (state.state === State.Error) {
+          console.error('[AudioService] Playback entered error state');
           throw new Error('Playback failed to start');
         }
 
-        // Wait before checking again
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (state.state === State.Ready && playRetries < MAX_PLAY_RETRIES) {
+          playRetries++;
+          console.log(
+            `[AudioService] State is Ready — re-issuing TP.play() (attempt ${String(playRetries)})`
+          );
+          await TP.play();
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
       }
 
-      // Timeout reached
+      const finalState = await TP.getPlaybackState();
+      console.error('[AudioService] Playback timeout. Final state:', finalState.state);
       throw new Error('Playback start timeout');
     },
 
     pause: async (): Promise<void> => {
+      console.log('[AudioService] pause() called');
       await TP.pause();
     },
 
     stop: async (): Promise<void> => {
+      console.log('[AudioService] stop() called');
       await TP.stop();
     },
 
     togglePlayback: async (): Promise<boolean> => {
       const state = await TP.getPlaybackState();
+      console.log('[AudioService] togglePlayback(), current state:', state.state);
       if (state.state === State.Playing) {
         await TP.pause();
         return false;
@@ -229,6 +267,7 @@ const createRealAudioService = async (): Promise<AudioService> => {
     },
 
     destroy: (): void => {
+      console.log('[AudioService] destroy() called');
       // Reset the player on destroy
       void TP.reset();
       isSetup = false;
