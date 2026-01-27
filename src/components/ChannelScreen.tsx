@@ -9,6 +9,8 @@ import { useAudioStore } from '@/store/audioStore';
 
 import { AuthorAttribution } from './AuthorAttribution';
 import { BackgroundImage } from './BackgroundImage';
+import { CaretLeft } from './icons/CaretLeft';
+import { CaretRight } from './icons/CaretRight';
 import { Text } from './ui';
 
 interface ChannelScreenProps {
@@ -131,9 +133,9 @@ export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElemen
           {/* Swipe Hint - only on mobile */}
           {!isWeb && (
             <View className="flex-row items-center gap-2 rounded-full bg-white/20 px-4 py-2">
-              <Ionicons name="chevron-back" size={14} color="white" />
+              <CaretLeft size={14} color="white" />
               <Text className="text-sm text-white/80">swipe for more stations</Text>
-              <Ionicons name="chevron-forward" size={14} color="white" />
+              <CaretRight size={14} color="white" />
             </View>
           )}
         </View>

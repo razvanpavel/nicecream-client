@@ -73,6 +73,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
           maxBuffer: 50,
           playBuffer: 2,
           backBuffer: 0,
+          // Wait for initial playback buffer before starting audio output
+          autoHandleInterruptions: true,
         });
 
         // Configure player options for background playback
@@ -96,6 +98,12 @@ const createRealAudioService = async (): Promise<AudioService> => {
         });
 
         await TP.setRepeatMode(RepeatMode.Off);
+
+        // Brief yield to let the native player fully initialize its audio session.
+        // This prevents the first play() call from firing before the audio pipeline
+        // is ready, which on some iOS devices causes a silent first playback.
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         isSetup = true;
       }
       return isSetup;

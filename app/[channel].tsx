@@ -4,7 +4,8 @@ import { useEffect } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 
 import { ChannelScreen } from '@/components/ChannelScreen';
-import { Text } from '@/components/ui';
+import { CaretLeft } from '@/components/icons/CaretLeft';
+import { CaretRight } from '@/components/icons/CaretRight';
 import { STREAMS } from '@/config/streams';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
@@ -125,7 +126,7 @@ export default function ChannelRoute(): React.ReactElement {
             className="absolute left-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full active:opacity-80"
             style={{ backgroundColor: prevStream?.color }}
           >
-            <Text className="text-xl text-white">←</Text>
+            <CaretLeft size={32} color="white" />
           </Pressable>
         </Link>
 
@@ -134,7 +135,7 @@ export default function ChannelRoute(): React.ReactElement {
             className="absolute right-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full active:opacity-80"
             style={{ backgroundColor: nextStream?.color }}
           >
-            <Text className="text-xl text-white">→</Text>
+            <CaretRight size={32} color="white" />
           </Pressable>
         </Link>
 

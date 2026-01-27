@@ -25,21 +25,22 @@ LogBox.ignoreLogs([
   'Invariant Violation: Your JavaScript code tried to access a native module',
 ]);
 
-// Register playback service at module level (must happen before any TrackPlayer methods)
-// Skip in Expo Go since native modules aren't available
+// Register playback service SYNCHRONOUSLY at module level.
+// This MUST complete before setupPlayer() is ever called.
+// Using require() instead of dynamic import() to guarantee synchronous execution.
 const isExpoGoRuntime = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
-function registerPlaybackService(): void {
-  if (Platform.OS !== 'web' && !isExpoGoRuntime) {
-    void import('react-native-track-player').then((TrackPlayer) => {
-      void import('@/services/playbackService').then(({ PlaybackService }) => {
-        TrackPlayer.default.registerPlaybackService(() => PlaybackService);
-      });
-    });
-  }
+if (Platform.OS !== 'web' && !isExpoGoRuntime) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const TrackPlayer = require('react-native-track-player') as {
+    default: { registerPlaybackService: (factory: () => () => void) => void };
+  };
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PlaybackService } = require('@/services/playbackService') as {
+    PlaybackService: () => void;
+  };
+  TrackPlayer.default.registerPlaybackService(() => PlaybackService);
 }
-
-registerPlaybackService();
 
 // Keep splash screen visible while loading fonts
 void SplashScreen.preventAutoHideAsync();

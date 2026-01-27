@@ -13,8 +13,11 @@ npm run typecheck      # TypeScript check (run before committing)
 npm run lint           # ESLint check
 npm run lint:fix       # Auto-fix lint issues
 npm run format         # Format with Prettier
+npm run format:check   # Check formatting (CI)
 npm run prebuild       # Generate native projects
 npm run build:dev      # EAS development build
+npm run build:preview  # EAS preview build
+npm run build:prod     # EAS production build
 ```
 
 ## Architecture

@@ -6,7 +6,8 @@ import { useAudioStore } from '@/store/audioStore';
 import { cn } from '@/utils/cn';
 
 import { ChannelScreen } from './ChannelScreen';
-import { Text } from './ui';
+import { CaretLeft } from './icons/CaretLeft';
+import { CaretRight } from './icons/CaretRight';
 
 export function SwipePager(): React.ReactElement {
   const [currentIndex, setCurrentIndex] = useState(getDefaultStreamIndex);
@@ -53,7 +54,7 @@ export function SwipePager(): React.ReactElement {
         }}
         className="absolute left-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full bg-white/20 active:bg-white/40"
       >
-        <Text className="text-xl text-white">←</Text>
+        <CaretLeft size={32} color="white" />
       </Pressable>
 
       <Pressable
@@ -62,7 +63,7 @@ export function SwipePager(): React.ReactElement {
         }}
         className="absolute right-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full bg-white/20 active:bg-white/40"
       >
-        <Text className="text-xl text-white">→</Text>
+        <CaretRight size={32} color="white" />
       </Pressable>
 
       {/* Dots Indicator */}
