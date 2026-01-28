@@ -184,10 +184,12 @@ const createRealAudioService = async (): Promise<AudioService> => {
       }
 
       if (activeTrack != null) {
-        // Stream switch: use load() to replace the track without tearing down
-        // the audio session. reset() destroys the CoreAudio IO context, which
-        // on iOS Simulator causes the HAL proxy to break permanently.
-        console.log('[AudioService] Stream switch — using load() to replace track...');
+        // Stream switch: explicitly clear playWhenReady before load() to prevent
+        // it from auto-playing into a broken CoreAudio state. The subsequent
+        // play() call will start from Ready — the same reliable path as cold start.
+        console.log('[AudioService] Stream switch — clearing playWhenReady before load...');
+        await TP.setPlayWhenReady(false);
+        console.log('[AudioService] Loading new track...');
         await TP.load(track);
       } else {
         // Cold start: no track loaded yet, use add()
@@ -199,13 +201,39 @@ const createRealAudioService = async (): Promise<AudioService> => {
         return;
       }
 
-      console.log('[AudioService] Calling TP.play()...');
-      await TP.play();
-
-      // Wait for Playing state with retry on Ready (up to 10s).
-      // On iOS cold start, play() can fail to stick — re-issue on Ready.
+      // Wait for the player to reach Ready before calling play().
+      // Calling play() while still Loading/Buffering can put CoreAudio into a
+      // broken Playing state with no audio output. Waiting for Ready ensures
+      // CoreAudio's pipeline is fully initialized.
       const startTime = Date.now();
       const PLAY_TIMEOUT = 10000;
+
+      console.log('[AudioService] Waiting for Ready state before playing...');
+      while (Date.now() - startTime < PLAY_TIMEOUT) {
+        if (isCancelled()) {
+          return;
+        }
+
+        const state = await TP.getPlaybackState();
+
+        if (state.state === State.Ready) {
+          console.log(
+            `[AudioService] Ready after ${String(Date.now() - startTime)}ms — calling TP.play()...`
+          );
+          break;
+        }
+
+        if (state.state === State.Error) {
+          console.error('[AudioService] Playback entered error state during load');
+          throw new Error('Playback failed to start');
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      await TP.play();
+
+      // Confirm Playing state with retry on Ready (play() can fail to stick).
       let playRetries = 0;
       const MAX_PLAY_RETRIES = 5;
 
