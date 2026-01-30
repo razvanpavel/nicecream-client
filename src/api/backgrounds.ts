@@ -14,11 +14,11 @@ export interface BackgroundResponse {
 
 /**
  * Fetch a background image for the specified channel/category
- * @param category - The channel category ('red', 'green', or 'blue')
+ * All channels use the 'black' tag for backgrounds
  */
-export async function fetchBackground(category: BackgroundCategory): Promise<BackgroundResponse> {
+export async function fetchBackground(_category: BackgroundCategory): Promise<BackgroundResponse> {
   const response = await axios.get<BackgroundResponse>(BACKGROUND_API_URL, {
-    params: { category },
+    params: { category: 'black' },
     timeout: 10000,
   });
   return response.data;

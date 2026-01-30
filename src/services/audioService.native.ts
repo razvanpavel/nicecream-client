@@ -149,7 +149,10 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
     play: async (url: string, title: string, signal?: AbortSignal): Promise<void> => {
       const thisRequestId = ++currentPlayRequestId;
-      console.log(`[AudioService] play() called — request #${String(thisRequestId)}, url=${url}`);
+      const t0 = Date.now();
+      const elapsed = (): string => `+${String(Date.now() - t0)}ms`;
+
+      console.log(`[AudioService] ${elapsed()} play() called — request #${String(thisRequestId)}, url=${url}`);
 
       // Use signal if provided, otherwise fall back to request ID comparison
       const isCancelled = (): boolean =>
@@ -157,13 +160,14 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
       // Ensure TrackPlayer is initialized before attempting playback
       if (!isSetup) {
-        console.log('[AudioService] Not setup yet, running doSetup from play()');
+        console.log(`[AudioService] ${elapsed()} Not setup yet, running doSetup from play()`);
         await doSetup();
+        console.log(`[AudioService] ${elapsed()} doSetup resolved`);
       }
 
       // Check if superseded during setup
       if (isCancelled()) {
-        console.log('[AudioService] Play request superseded during setup');
+        console.log(`[AudioService] ${elapsed()} Play request superseded during setup`);
         return;
       }
 
@@ -187,14 +191,16 @@ const createRealAudioService = async (): Promise<AudioService> => {
         // Stream switch: explicitly clear playWhenReady before load() to prevent
         // it from auto-playing into a broken CoreAudio state. The subsequent
         // play() call will start from Ready — the same reliable path as cold start.
-        console.log('[AudioService] Stream switch — clearing playWhenReady before load...');
+        console.log(`[AudioService] ${elapsed()} Stream switch — calling setPlayWhenReady(false)...`);
         await TP.setPlayWhenReady(false);
-        console.log('[AudioService] Loading new track...');
+        console.log(`[AudioService] ${elapsed()} setPlayWhenReady done, calling load()...`);
         await TP.load(track);
+        console.log(`[AudioService] ${elapsed()} load() resolved`);
       } else {
         // Cold start: no track loaded yet, use add()
-        console.log('[AudioService] Cold start — adding track...');
+        console.log(`[AudioService] ${elapsed()} Cold start — calling add()...`);
         await TP.add(track);
+        console.log(`[AudioService] ${elapsed()} add() resolved`);
       }
 
       if (isCancelled()) {
@@ -205,26 +211,30 @@ const createRealAudioService = async (): Promise<AudioService> => {
       // Calling play() while still Loading/Buffering can put CoreAudio into a
       // broken Playing state with no audio output. Waiting for Ready ensures
       // CoreAudio's pipeline is fully initialized.
-      const startTime = Date.now();
       const PLAY_TIMEOUT = 10000;
+      let lastLoggedState = '';
 
-      console.log('[AudioService] Waiting for Ready state before playing...');
-      while (Date.now() - startTime < PLAY_TIMEOUT) {
+      console.log(`[AudioService] ${elapsed()} Waiting for Ready state before playing...`);
+      while (Date.now() - t0 < PLAY_TIMEOUT) {
         if (isCancelled()) {
           return;
         }
 
         const state = await TP.getPlaybackState();
+        const currentState = state.state as string;
+
+        if (currentState !== lastLoggedState) {
+          console.log(`[AudioService] ${elapsed()} State: ${currentState}`);
+          lastLoggedState = currentState;
+        }
 
         if (state.state === State.Ready) {
-          console.log(
-            `[AudioService] Ready after ${String(Date.now() - startTime)}ms — calling TP.play()...`
-          );
+          console.log(`[AudioService] ${elapsed()} Ready — calling TP.play()...`);
           break;
         }
 
         if (state.state === State.Error) {
-          console.error('[AudioService] Playback entered error state during load');
+          console.error(`[AudioService] ${elapsed()} Playback entered error state during load`);
           throw new Error('Playback failed to start');
         }
 
@@ -232,12 +242,13 @@ const createRealAudioService = async (): Promise<AudioService> => {
       }
 
       await TP.play();
+      console.log(`[AudioService] ${elapsed()} TP.play() resolved`);
 
       // Confirm Playing state with retry on Ready (play() can fail to stick).
       let playRetries = 0;
       const MAX_PLAY_RETRIES = 5;
 
-      while (Date.now() - startTime < PLAY_TIMEOUT) {
+      while (Date.now() - t0 < PLAY_TIMEOUT) {
         if (isCancelled()) {
           return;
         }
@@ -246,20 +257,20 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
         if (state.state === State.Playing) {
           console.log(
-            `[AudioService] Playback confirmed after ${String(Date.now() - startTime)}ms (retries: ${String(playRetries)})`
+            `[AudioService] ${elapsed()} Playback confirmed (retries: ${String(playRetries)})`
           );
           return;
         }
 
         if (state.state === State.Error) {
-          console.error('[AudioService] Playback entered error state');
+          console.error(`[AudioService] ${elapsed()} Playback entered error state`);
           throw new Error('Playback failed to start');
         }
 
         if (state.state === State.Ready && playRetries < MAX_PLAY_RETRIES) {
           playRetries++;
           console.log(
-            `[AudioService] State is Ready — re-issuing TP.play() (attempt ${String(playRetries)})`
+            `[AudioService] ${elapsed()} State is Ready — re-issuing TP.play() (attempt ${String(playRetries)})`
           );
           await TP.play();
         }
@@ -268,7 +279,7 @@ const createRealAudioService = async (): Promise<AudioService> => {
       }
 
       const finalState = await TP.getPlaybackState();
-      console.error('[AudioService] Playback timeout. Final state:', finalState.state);
+      console.error(`[AudioService] ${elapsed()} Playback timeout. Final state:`, finalState.state);
       throw new Error('Playback start timeout');
     },
 
