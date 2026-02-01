@@ -1,10 +1,13 @@
-import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 
-import { getAudioService, isExpoGo } from '@/services/audioService';
+import { getAudioService } from '@/services/audioService';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
+
+// Check for Expo Go BEFORE any native module imports
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 // Debounce time for network reconnection attempts
 const NETWORK_RECONNECT_DEBOUNCE_MS = 2000;
@@ -36,6 +39,8 @@ export function useAudioLifecycle(): void {
   const healthCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Track consecutive health check failures for circuit breaker pattern
   const healthCheckFailuresRef = useRef<number>(0);
+  // Track NetInfo unsubscribe function
+  const netInfoUnsubscribeRef = useRef<(() => void) | null>(null);
 
   // Clear reconnect timeout helper
   const clearReconnectTimeout = useCallback((): void => {
@@ -92,51 +97,6 @@ export function useAudioLifecycle(): void {
     [status]
   );
 
-  // Handle network state changes
-  const handleNetworkChange = useCallback(
-    (state: NetInfoState): void => {
-      if (isExpoGo) return;
-
-      const isConnected = state.isConnected ?? false;
-      const wasConnected = wasConnectedRef.current;
-      wasConnectedRef.current = isConnected;
-
-      console.log('[AudioLifecycle] Network state:', isConnected ? 'connected' : 'disconnected');
-
-      // Update offline state in store
-      useAppStore.getState().setOffline(!isConnected);
-
-      // Network just came back
-      if (isConnected && !wasConnected) {
-        console.log('[AudioLifecycle] Network restored');
-
-        // If we were trying to play something, attempt reconnect with debounce
-        if (
-          (status === 'playing' || status === 'loading' || status === 'error') &&
-          currentStreamUrl !== null &&
-          currentStreamName !== null
-        ) {
-          clearReconnectTimeout();
-
-          reconnectTimeoutRef.current = setTimeout(() => {
-            console.log('[AudioLifecycle] Attempting reconnect after network restore...');
-            // Trigger a replay through the store
-            void useAudioStore.getState().playStream(currentStreamUrl, currentStreamName);
-            reconnectTimeoutRef.current = null;
-          }, NETWORK_RECONNECT_DEBOUNCE_MS);
-        }
-      }
-
-      // Network lost while playing - the error will be caught by playbackService
-      if (!isConnected && wasConnected && status === 'playing') {
-        console.log('[AudioLifecycle] Network lost while playing');
-        // PlaybackService will handle the error state
-        // We just log here for visibility
-      }
-    },
-    [status, currentStreamUrl, currentStreamName, clearReconnectTimeout]
-  );
-
   // Set up AppState listener
   useEffect(() => {
     if (isExpoGo) return;
@@ -150,17 +110,69 @@ export function useAudioLifecycle(): void {
     };
   }, [handleAppStateChange]);
 
-  // Set up NetInfo listener
+  // Set up NetInfo listener (dynamically imported to avoid Expo Go crash)
   useEffect(() => {
     if (isExpoGo) return;
 
-    const unsubscribe = NetInfo.addEventListener(handleNetworkChange);
+    // Dynamic import to avoid crash in Expo Go
+    void import('@react-native-community/netinfo').then((NetInfo) => {
+      const handleNetworkChange = (state: { isConnected: boolean | null }): void => {
+        const isConnected = state.isConnected ?? false;
+        const wasConnected = wasConnectedRef.current;
+        wasConnectedRef.current = isConnected;
+
+        console.log('[AudioLifecycle] Network state:', isConnected ? 'connected' : 'disconnected');
+
+        // Update offline state in store
+        useAppStore.getState().setOffline(!isConnected);
+
+        // Network just came back
+        if (isConnected && !wasConnected) {
+          console.log('[AudioLifecycle] Network restored');
+
+          // If we were trying to play something, attempt reconnect with debounce
+          const currentStatus = useAudioStore.getState().status;
+          const streamUrl = useAudioStore.getState().currentStreamUrl;
+          const streamName = useAudioStore.getState().currentStreamName;
+
+          if (
+            (currentStatus === 'playing' ||
+              currentStatus === 'loading' ||
+              currentStatus === 'error') &&
+            streamUrl !== null &&
+            streamName !== null
+          ) {
+            clearReconnectTimeout();
+
+            reconnectTimeoutRef.current = setTimeout(() => {
+              console.log('[AudioLifecycle] Attempting reconnect after network restore...');
+              // Trigger a replay through the store
+              void useAudioStore.getState().playStream(streamUrl, streamName);
+              reconnectTimeoutRef.current = null;
+            }, NETWORK_RECONNECT_DEBOUNCE_MS);
+          }
+        }
+
+        // Network lost while playing - the error will be caught by playbackService
+        const currentStatus = useAudioStore.getState().status;
+        if (!isConnected && wasConnected && currentStatus === 'playing') {
+          console.log('[AudioLifecycle] Network lost while playing');
+          // PlaybackService will handle the error state
+          // We just log here for visibility
+        }
+      };
+
+      netInfoUnsubscribeRef.current = NetInfo.default.addEventListener(handleNetworkChange);
+    });
 
     return (): void => {
-      unsubscribe();
+      if (netInfoUnsubscribeRef.current !== null) {
+        netInfoUnsubscribeRef.current();
+        netInfoUnsubscribeRef.current = null;
+      }
       clearReconnectTimeout();
     };
-  }, [handleNetworkChange, clearReconnectTimeout]);
+  }, [clearReconnectTimeout]);
 
   // Periodic health check while playing
   // Detects stalled playback, Bluetooth disconnection, audio route changes, etc.
