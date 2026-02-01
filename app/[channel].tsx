@@ -1,25 +1,17 @@
-import { Link, Redirect, useLocalSearchParams } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import Head from 'expo-router/head';
-import { useEffect } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { useCallback, useEffect } from 'react';
+import { Platform, View } from 'react-native';
 
+import { BottomNavigation } from '@/components/BottomNavigation';
 import { ChannelScreen } from '@/components/ChannelScreen';
-import { CaretLeft } from '@/components/icons/CaretLeft';
-import { CaretRight } from '@/components/icons/CaretRight';
 import { STREAMS } from '@/config/streams';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
-import { cn } from '@/utils/cn';
 
 type ChannelId = 'red' | 'green' | 'blue';
 
 const VALID_CHANNELS: ChannelId[] = ['red', 'green', 'blue'];
-
-const DOT_COLORS: Record<ChannelId, string> = {
-  red: 'bg-brand-red',
-  green: 'bg-brand-green',
-  blue: 'bg-brand-blue',
-};
 
 function isChannelId(value: string): value is ChannelId {
   return (VALID_CHANNELS as string[]).includes(value);
@@ -42,6 +34,7 @@ function getAdjacentChannels(currentId: ChannelId): { prev: ChannelId; next: Cha
 
 export default function ChannelRoute(): React.ReactElement {
   const { channel } = useLocalSearchParams<{ channel: string }>();
+  const router = useRouter();
   const { status, currentStreamUrl, playStream, togglePlayback } = useAudioStore();
   const setCurrentStreamIndex = useAppStore((state) => state.setCurrentStreamIndex);
 
@@ -95,6 +88,16 @@ export default function ChannelRoute(): React.ReactElement {
     };
   }, [stream, currentStreamUrl, status, togglePlayback, playStream]);
 
+  const { prev, next } = getAdjacentChannels(currentChannel);
+
+  const handlePrevious = useCallback((): void => {
+    router.replace(`/${prev}`);
+  }, [router, prev]);
+
+  const handleNext = useCallback((): void => {
+    router.replace(`/${next}`);
+  }, [router, next]);
+
   // Redirect if invalid channel
   if (!isChannelId(channel)) {
     return <Redirect href="/green" />;
@@ -103,10 +106,6 @@ export default function ChannelRoute(): React.ReactElement {
   if (stream === undefined) {
     return <Redirect href="/green" />;
   }
-
-  const { prev, next } = getAdjacentChannels(currentChannel);
-  const prevStream = STREAMS.find((s) => s.id === prev);
-  const nextStream = STREAMS.find((s) => s.id === next);
 
   return (
     <>
@@ -120,40 +119,8 @@ export default function ChannelRoute(): React.ReactElement {
       <View className="relative flex-1">
         <ChannelScreen stream={stream} />
 
-        {/* Navigation Arrows - colored by destination stream */}
-        <Link href={`/${prev}`} asChild replace>
-          <Pressable
-            className="absolute left-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full active:opacity-80"
-            style={{ backgroundColor: prevStream?.color }}
-          >
-            <CaretLeft size={32} color="white" />
-          </Pressable>
-        </Link>
-
-        <Link href={`/${next}`} asChild replace>
-          <Pressable
-            className="absolute right-4 top-1/2 h-12 w-12 -translate-y-6 items-center justify-center rounded-full active:opacity-80"
-            style={{ backgroundColor: nextStream?.color }}
-          >
-            <CaretRight size={32} color="white" />
-          </Pressable>
-        </Link>
-
-        {/* Dots Indicator - colored by stream */}
-        <View className="absolute bottom-10 left-0 right-0 flex-row justify-center gap-2">
-          {STREAMS.map((s) => (
-            <Link key={s.id} href={`/${s.id}`} asChild replace>
-              <Pressable>
-                <View
-                  className={cn(
-                    'h-2.5 w-2.5 rounded-full',
-                    s.id === currentChannel ? 'bg-white' : [DOT_COLORS[s.id], 'opacity-60']
-                  )}
-                />
-              </Pressable>
-            </Link>
-          ))}
-        </View>
+        {/* Fixed Bottom Navigation */}
+        <BottomNavigation onPrevious={handlePrevious} onNext={handleNext} />
       </View>
     </>
   );

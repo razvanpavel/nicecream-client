@@ -1,0 +1,9 @@
+export { CaretLeft } from './CaretLeft';
+export { CaretRight } from './CaretRight';
+export { CloseIcon } from './CloseIcon';
+export { HeartIcon } from './HeartIcon';
+export { MenuIcon } from './MenuIcon';
+export { NextIcon } from './NextIcon';
+export { PauseIcon } from './PauseIcon';
+export { PlayIcon } from './PlayIcon';
+export { PrevIcon } from './PrevIcon';

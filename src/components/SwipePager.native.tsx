@@ -7,6 +7,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
+import { BottomNavigation } from './BottomNavigation';
 import { ChannelScreen } from './ChannelScreen';
 
 // For infinite scroll: [Blue, Red, Green, Blue, Red]
@@ -52,13 +53,17 @@ export function SwipePager(): React.ReactElement {
   const haptics = useHaptics();
   const playStream = useAudioStore((state) => state.playStream);
   const setCurrentStreamIndex = useAppStore((state) => state.setCurrentStreamIndex);
+  const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
   const initialPage = getInitialPage();
   // Track programmatic jumps to avoid duplicate stream switches
   const isJumpingRef = useRef(false);
+  // Track current page for navigation
+  const currentPageRef = useRef(initialPage);
 
   const handlePageSelected = useCallback(
     async (event: PagerViewOnPageSelectedEvent): Promise<void> => {
       const position = event.nativeEvent.position;
+      currentPageRef.current = position;
 
       // If this is from a programmatic jump, skip stream switching logic
       if (isJumpingRef.current) {
@@ -79,6 +84,7 @@ export function SwipePager(): React.ReactElement {
       if (position === 0) {
         isJumpingRef.current = true;
         pagerRef.current?.setPageWithoutAnimation(3);
+        currentPageRef.current = 3;
         // Switch to the actual stream (Blue at page 3)
         const stream = INFINITE_PAGES[3];
         const currentStatus = useAudioStore.getState().status;
@@ -89,6 +95,7 @@ export function SwipePager(): React.ReactElement {
       } else if (position === 4) {
         isJumpingRef.current = true;
         pagerRef.current?.setPageWithoutAnimation(1);
+        currentPageRef.current = 1;
         // Switch to the actual stream (Red at page 1)
         const stream = INFINITE_PAGES[1];
         const currentStatus = useAudioStore.getState().status;
@@ -110,22 +117,42 @@ export function SwipePager(): React.ReactElement {
     [haptics, playStream, setCurrentStreamIndex]
   );
 
+  const handlePrevious = useCallback((): void => {
+    // Map current stream index to page, then go to previous
+    // Stream indices: Red=0, Green=1, Blue=2
+    // Pages: Red=1, Green=2, Blue=3
+    const currentPage = currentStreamIndex + 1;
+    const prevPage = currentPage - 1;
+    pagerRef.current?.setPage(prevPage);
+  }, [currentStreamIndex]);
+
+  const handleNext = useCallback((): void => {
+    const currentPage = currentStreamIndex + 1;
+    const nextPage = currentPage + 1;
+    pagerRef.current?.setPage(nextPage);
+  }, [currentStreamIndex]);
+
   return (
-    <PagerView
-      ref={pagerRef}
-      // eslint-disable-next-line react-native/no-inline-styles
-      style={{ flex: 1 }}
-      initialPage={initialPage}
-      onPageSelected={(e) => {
-        void handlePageSelected(e);
-      }}
-      overdrag={true}
-    >
-      {INFINITE_PAGES.map((stream, index) => (
-        <View key={`${stream.id}-${String(index)}`} className="flex-1">
-          <ChannelScreen stream={stream} />
-        </View>
-      ))}
-    </PagerView>
+    <View className="flex-1">
+      <PagerView
+        ref={pagerRef}
+        // eslint-disable-next-line react-native/no-inline-styles
+        style={{ flex: 1 }}
+        initialPage={initialPage}
+        onPageSelected={(e) => {
+          void handlePageSelected(e);
+        }}
+        overdrag={true}
+      >
+        {INFINITE_PAGES.map((stream, index) => (
+          <View key={`${stream.id}-${String(index)}`} className="flex-1">
+            <ChannelScreen stream={stream} />
+          </View>
+        ))}
+      </PagerView>
+
+      {/* Fixed Bottom Navigation */}
+      <BottomNavigation onPrevious={handlePrevious} onNext={handleNext} />
+    </View>
   );
 }
