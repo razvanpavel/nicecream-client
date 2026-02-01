@@ -120,10 +120,10 @@ export function BottomNavigation({
     >
       {/* Track Info */}
       {showTrackInfo && (
-        <View className="mb-10 items-center px-8">
+        <View className="mb-8 items-center px-8">
           {streamMetadata.title != null && streamMetadata.title !== '-' && (
             <Text
-              className="text-center font-heading text-lg uppercase text-white"
+              className="text-center font-heading text-lg font-bold uppercase tracking-wider text-white"
               numberOfLines={1}
             >
               {streamMetadata.title}
@@ -131,7 +131,7 @@ export function BottomNavigation({
           )}
           {streamMetadata.artist != null && streamMetadata.artist !== '-' && (
             <Text
-              className="text-center font-body text-base uppercase text-white"
+              className="text-center text-base uppercase tracking-wider text-white"
               numberOfLines={1}
             >
               {streamMetadata.artist}
@@ -146,8 +146,7 @@ export function BottomNavigation({
         <Pressable
           onPress={handleHeartPress}
           disabled={!hasTrackInfo}
-          className="h-16 w-16 items-center justify-center active:opacity-70"
-          style={{ opacity: hasTrackInfo ? 1 : 0.4 }}
+          className={`"h-16 active:opacity-70" w-16 items-center justify-center ${!hasTrackInfo ? 'opacity-40' : ''}`}
         >
           <HeartIcon size={56} color="white" />
         </Pressable>

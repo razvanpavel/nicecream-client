@@ -6,6 +6,16 @@ import { useAudioStore } from '@/store/audioStore';
 // show loading spinner so the UI doesn't appear stuck.
 let bufferingTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+// Track if we were playing before an audio focus interruption (for smart resume)
+let wasPlayingBeforeDuck = false;
+
+// Track all event subscriptions for explicit cleanup
+// Using ReturnType to infer the correct subscription type
+let eventSubscriptions: ReturnType<typeof TrackPlayer.addEventListener>[] = [];
+
+// Track if service is initialized (singleton pattern)
+let isServiceInitialized = false;
+
 function clearBufferingTimeout(): void {
   if (bufferingTimeoutId !== null) {
     clearTimeout(bufferingTimeoutId);
@@ -14,59 +24,116 @@ function clearBufferingTimeout(): void {
 }
 
 /**
+ * Cleanup function to remove all event listeners
+ * Called when destroying the audio service
+ */
+export function cleanupPlaybackService(): void {
+  console.log('[PlaybackService] Cleaning up event listeners...');
+  clearBufferingTimeout();
+
+  for (const subscription of eventSubscriptions) {
+    subscription.remove();
+  }
+  eventSubscriptions = [];
+  wasPlayingBeforeDuck = false;
+  isServiceInitialized = false;
+
+  console.log('[PlaybackService] Cleanup complete');
+}
+
+/**
  * Playback service that runs in the background
  * This handles remote controls (lock screen, notification, headphones, etc.)
  */
 export function PlaybackService(): void {
+  // Guard against double initialization
+  if (isServiceInitialized) {
+    console.log('[PlaybackService] Already initialized, skipping');
+    return;
+  }
+  isServiceInitialized = true;
+  console.log('[PlaybackService] Initializing event listeners...');
+
+  // Helper to add and track subscriptions
+  const addListener = <T extends Event>(
+    event: T,
+    handler: Parameters<typeof TrackPlayer.addEventListener<T>>[1]
+  ): void => {
+    const subscription = TrackPlayer.addEventListener(event, handler);
+    eventSubscriptions.push(subscription);
+  };
+
   // Remote play (from notification, lock screen, headphones)
-  TrackPlayer.addEventListener(Event.RemotePlay, () => {
+  addListener(Event.RemotePlay, () => {
     TrackPlayer.play().catch((e: unknown) => {
       console.error('[PlaybackService] RemotePlay failed:', e);
     });
   });
 
   // Remote pause
-  TrackPlayer.addEventListener(Event.RemotePause, () => {
+  addListener(Event.RemotePause, () => {
     TrackPlayer.pause().catch((e: unknown) => {
       console.error('[PlaybackService] RemotePause failed:', e);
     });
   });
 
   // Remote stop
-  TrackPlayer.addEventListener(Event.RemoteStop, () => {
+  addListener(Event.RemoteStop, () => {
     TrackPlayer.stop().catch((e: unknown) => {
       console.error('[PlaybackService] RemoteStop failed:', e);
     });
   });
 
   // Remote seek (for scrubbing in notification)
-  TrackPlayer.addEventListener(Event.RemoteSeek, (event) => {
+  addListener(Event.RemoteSeek, (event) => {
     TrackPlayer.seekTo(event.position).catch((e: unknown) => {
       console.error('[PlaybackService] RemoteSeek failed:', e);
     });
   });
 
-  // Handle headphone disconnect - pause playback
-  TrackPlayer.addEventListener(Event.RemoteDuck, (event) => {
+  // Handle audio focus changes (phone calls, other apps, headphones, etc.)
+  // This is crucial for Android audio focus management
+  addListener(Event.RemoteDuck, (event) => {
+    console.log('[PlaybackService] RemoteDuck event:', {
+      paused: event.paused,
+      permanent: event.permanent,
+    });
+
     if (event.paused) {
+      // Temporary audio focus loss (e.g., notification sound, phone call)
+      // Remember if we were playing so we can resume
+      const currentStatus = useAudioStore.getState().status;
+      wasPlayingBeforeDuck = currentStatus === 'playing';
+      console.log('[PlaybackService] Audio ducked, was playing:', wasPlayingBeforeDuck);
+
       TrackPlayer.pause().catch((e: unknown) => {
         console.error('[PlaybackService] RemoteDuck pause failed:', e);
       });
     } else if (event.permanent) {
+      // Permanent audio focus loss (another app took over audio)
+      console.log('[PlaybackService] Audio focus lost permanently');
+      wasPlayingBeforeDuck = false;
+
       TrackPlayer.stop().catch((e: unknown) => {
         console.error('[PlaybackService] RemoteDuck stop failed:', e);
       });
     } else {
-      TrackPlayer.play().catch((e: unknown) => {
-        console.error('[PlaybackService] RemoteDuck play failed:', e);
-      });
+      // Audio focus regained - only resume if we were playing before
+      console.log('[PlaybackService] Audio focus regained, resuming:', wasPlayingBeforeDuck);
+
+      if (wasPlayingBeforeDuck) {
+        TrackPlayer.play().catch((e: unknown) => {
+          console.error('[PlaybackService] RemoteDuck play failed:', e);
+        });
+      }
+      wasPlayingBeforeDuck = false;
     }
   });
 
   // Sync playback state changes to Zustand store
   // Note: During controlled transitions (isTransitioning=true), we ignore most state changes
   // to prevent the store from being overwritten during stream switches
-  TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
+  addListener(Event.PlaybackState, (event) => {
     console.log(
       '[PlaybackService] PlaybackState event:',
       event.state,
@@ -162,7 +229,7 @@ export function PlaybackService(): void {
   });
 
   // Handle playback errors
-  TrackPlayer.addEventListener(Event.PlaybackError, (event) => {
+  addListener(Event.PlaybackError, (event) => {
     console.error('[PlaybackService] PlaybackError:', event);
     useAudioStore.setState({
       status: 'error',
@@ -175,7 +242,7 @@ export function PlaybackService(): void {
   });
 
   // Handle metadata updates (for Icecast streams that send track info)
-  TrackPlayer.addEventListener(Event.MetadataCommonReceived, (event) => {
+  addListener(Event.MetadataCommonReceived, (event) => {
     const streamMetadata: { title?: string; artist?: string } = {};
 
     if (event.metadata.title !== undefined) {
@@ -189,4 +256,8 @@ export function PlaybackService(): void {
       useAudioStore.setState({ streamMetadata });
     }
   });
+
+  console.log(
+    `[PlaybackService] Initialized with ${String(eventSubscriptions.length)} event listeners`
+  );
 }

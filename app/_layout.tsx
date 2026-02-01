@@ -10,8 +10,9 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClient } from '@/api/queryClient';
+import { useAudioLifecycle } from '@/hooks/useAudioLifecycle';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
-import { getAudioService, isExpoGo } from '@/services/audioService';
+import { destroyAudioService, getAudioService, isExpoGo } from '@/services/audioService';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
@@ -52,6 +53,9 @@ export default function RootLayout(): React.ReactElement | null {
   // Poll now playing API when streaming
   useNowPlaying();
 
+  // Monitor app state and network for audio lifecycle management
+  useAudioLifecycle();
+
   const [fontsLoaded] = useFonts({
     'AlteHaasGrotesk-Bold': AlteHaasGroteskBold,
     'AlteHaasGrotesk-Regular': AlteHaasGroteskRegular,
@@ -78,6 +82,11 @@ export default function RootLayout(): React.ReactElement | null {
       }
     };
     void initPlayer();
+
+    // Cleanup on unmount (app termination)
+    return (): void => {
+      destroyAudioService();
+    };
   }, [setPlayerSetup, setTrackPlayerAvailable]);
 
   useEffect(() => {

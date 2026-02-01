@@ -1,5 +1,7 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
+import { cleanupPlaybackService } from './playbackService.native';
+
 // Check if running in Expo Go
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
@@ -11,6 +13,12 @@ interface AudioService {
   stop: () => Promise<void>;
   togglePlayback: () => Promise<boolean>;
   destroy: () => void;
+  // Enhanced lifecycle management methods
+  getPlaybackState: () => Promise<string>;
+  verifyPlayback: () => Promise<boolean>;
+  reconnectStream: () => Promise<void>;
+  // Live stream control
+  seekToLive: () => Promise<void>;
 }
 
 // Mock service for Expo Go
@@ -36,6 +44,13 @@ const mockAudioService: AudioService = {
   destroy: (): void => {
     console.log('[Mock Audio] Would destroy');
   },
+  getPlaybackState: (): Promise<string> => Promise.resolve('idle'),
+  verifyPlayback: (): Promise<boolean> => Promise.resolve(true),
+  reconnectStream: (): Promise<void> => Promise.resolve(),
+  seekToLive: (): Promise<void> => {
+    console.log('[Mock Audio] Would seek to live');
+    return Promise.resolve();
+  },
 };
 
 // Real service using TrackPlayer
@@ -58,6 +73,28 @@ const createRealAudioService = async (): Promise<AudioService> => {
   let setupPromise: Promise<boolean> | null = null;
   // Fallback request ID for direct play() calls without AbortSignal
   let currentPlayRequestId = 0;
+  // Track the last known good stream URL for reconnection
+  let lastStreamUrl: string | null = null;
+  let lastStreamTitle: string | null = null;
+
+  // Helper: Wait for a specific state with timeout
+  const waitForState = async (
+    targetState: (typeof State)[keyof typeof State],
+    timeoutMs: number
+  ): Promise<boolean> => {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      const state = await TP.getPlaybackState();
+      if (state.state === targetState) {
+        return true;
+      }
+      if (state.state === State.Error) {
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return false;
+  };
 
   // Extract setup logic so it can be called from play()
   const doSetup = async (): Promise<boolean> => {
@@ -82,9 +119,36 @@ const createRealAudioService = async (): Promise<AudioService> => {
         isSetup = true;
       } catch {
         console.log('[AudioService] Player not initialized, calling setupPlayer...');
-        // Setup the player
+
+        // =======================================================================
+        // iOS Audio Session Configuration
+        // =======================================================================
+        // Category: Playback
+        //   - Allows background audio playback
+        //   - Audio continues when screen is locked
+        //   - Audio continues when app is backgrounded
+        //   - Silences other apps (exclusive audio)
+        //
+        // Mode: Default
+        //   - Standard playback mode for music/audio streaming
+        //   - No special processing (voice chat, measurement, etc.)
+        //
+        // Options:
+        //   - AllowAirPlay: Enables streaming to AirPlay devices
+        //   - AllowBluetoothA2DP: Enables high-quality stereo Bluetooth
+        //     (A2DP = Advanced Audio Distribution Profile)
+        //
+        // NOT using:
+        //   - MixWithOthers: Would allow other apps to play simultaneously
+        //     (not appropriate for a dedicated radio app)
+        //   - DuckOthers: Would lower other audio instead of stopping it
+        //     (not needed - we're the primary audio source)
+        //   - InterruptSpokenAudioAndMixWithOthers: For apps that briefly interrupt
+        //     (not appropriate for continuous streaming)
+        // =======================================================================
+
         await TP.setupPlayer({
-          // iOS audio session — activates Playback category on cold start
+          // iOS audio session configuration
           iosCategory: IOSCategory.Playback,
           iosCategoryMode: IOSCategoryMode.Default,
           iosCategoryOptions: [
@@ -92,33 +156,64 @@ const createRealAudioService = async (): Promise<AudioService> => {
             IOSCategoryOptions.AllowBluetoothA2DP,
           ],
 
-          // Buffer settings (maxBuffer/playBuffer/backBuffer are Android-only)
+          // =======================================================================
+          // Buffer Configuration (Android ExoPlayer settings)
+          // =======================================================================
+          // minBuffer: Minimum buffer before playback starts (seconds)
+          //   - Higher = longer initial load, more resilient to network hiccups
+          //   - 15s is a good balance for live streaming
           minBuffer: 15,
+
+          // maxBuffer: Maximum buffer size (seconds)
+          //   - For live streams, we don't need huge buffers
+          //   - 50s provides good resilience without wasting memory
           maxBuffer: 50,
+
+          // playBuffer: Buffer required to resume after rebuffer (seconds)
+          //   - Lower = faster resume after network issues
+          //   - 2s allows quick recovery
           playBuffer: 2,
+
+          // backBuffer: Cached audio behind playhead (seconds)
+          //   - 0 for live streams (no seeking backwards needed)
           backBuffer: 0,
 
+          // Auto-handle audio interruptions (phone calls, Siri, etc.)
           autoHandleInterruptions: true,
         });
         console.log('[AudioService] setupPlayer complete');
 
-        // Configure player options for background playback
+        // =======================================================================
+        // Player Options for Background Playback & Notifications
+        // =======================================================================
+
         await TP.updateOptions({
-          // Android-specific: Keep playing when app is killed
+          // Android-specific background playback behavior
           android: {
+            // ContinuePlayback: Keep playing when app is removed from recents
+            // This creates a foreground service that survives app termination
+            // Alternatives:
+            //   - StopPlaybackAndRemoveNotification: Stop when app killed
+            //   - PausePlayback: Pause but keep notification
             appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
+
+            // Pause when another app takes audio focus (phone calls, etc.)
+            // This ensures we don't fight for audio with other apps
+            alwaysPauseOnInterruption: true,
           },
 
-          // Capabilities shown in notification and lock screen
+          // Media controls shown on lock screen and notification
+          // We only show Play/Pause/Stop since live streams don't support seek
           capabilities: [Capability.Play, Capability.Pause, Capability.Stop],
 
-          // Compact notification capabilities (Android)
+          // Compact notification on Android (limited space)
           compactCapabilities: [Capability.Play, Capability.Pause],
 
-          // Notification configuration
+          // Full notification capabilities
           notificationCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
 
-          // Progress bar in notification (disabled for live streams)
+          // Progress bar update interval (0 = disabled for live streams)
+          // Live streams don't have meaningful progress to display
           progressUpdateEventInterval: 0,
         });
         console.log('[AudioService] updateOptions complete');
@@ -155,6 +250,10 @@ const createRealAudioService = async (): Promise<AudioService> => {
       console.log(
         `[AudioService] ${elapsed()} play() called — request #${String(thisRequestId)}, url=${url}`
       );
+
+      // Store for potential reconnection
+      lastStreamUrl = url;
+      lastStreamTitle = title;
 
       // Use signal if provided, otherwise fall back to request ID comparison
       const isCancelled = (): boolean =>
@@ -297,15 +396,63 @@ const createRealAudioService = async (): Promise<AudioService> => {
       await TP.stop();
     },
 
+    // Enhanced togglePlayback with state confirmation
     togglePlayback: async (): Promise<boolean> => {
       const state = await TP.getPlaybackState();
       console.log('[AudioService] togglePlayback(), current state:', state.state);
+
       if (state.state === State.Playing) {
+        // Pausing - straightforward
         await TP.pause();
+        // Confirm pause state
+        const confirmed = await waitForState(State.Paused, 2000);
+        if (!confirmed) {
+          console.warn('[AudioService] Pause state not confirmed, checking current state');
+          const currentState = await TP.getPlaybackState();
+          return currentState.state === State.Playing;
+        }
         return false;
       } else {
+        // Resuming from pause - needs state confirmation like play()
+        console.log('[AudioService] Resuming playback...');
         await TP.play();
-        return true;
+
+        // Wait for Playing state with retry logic
+        const RESUME_TIMEOUT = 5000;
+        const t0 = Date.now();
+        let retries = 0;
+        const MAX_RETRIES = 3;
+
+        while (Date.now() - t0 < RESUME_TIMEOUT) {
+          const currentState = await TP.getPlaybackState();
+
+          if (currentState.state === State.Playing) {
+            console.log(`[AudioService] Resume confirmed (retries: ${String(retries)})`);
+            return true;
+          }
+
+          if (currentState.state === State.Error) {
+            console.error('[AudioService] Error state during resume');
+            throw new Error('Failed to resume playback');
+          }
+
+          // If stuck in Ready/Paused, retry play()
+          if (
+            (currentState.state === State.Ready || currentState.state === State.Paused) &&
+            retries < MAX_RETRIES
+          ) {
+            retries++;
+            console.log(`[AudioService] Re-issuing play() for resume (attempt ${String(retries)})`);
+            await TP.play();
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+
+        // Final check
+        const finalState = await TP.getPlaybackState();
+        console.warn('[AudioService] Resume timeout, final state:', finalState.state);
+        return finalState.state === State.Playing;
       }
     },
 
@@ -315,6 +462,140 @@ const createRealAudioService = async (): Promise<AudioService> => {
       void TP.reset();
       isSetup = false;
       setupPromise = null;
+      lastStreamUrl = null;
+      lastStreamTitle = null;
+    },
+
+    // New: Get current playback state as string
+    getPlaybackState: async (): Promise<string> => {
+      try {
+        const state = await TP.getPlaybackState();
+        return state.state as string;
+      } catch {
+        return 'unknown';
+      }
+    },
+
+    // New: Verify playback is actually happening (for foreground check)
+    verifyPlayback: async (): Promise<boolean> => {
+      try {
+        const state = await TP.getPlaybackState();
+        const position1 = await TP.getProgress();
+
+        // If not playing, return false
+        if (state.state !== State.Playing) {
+          return false;
+        }
+
+        // For live streams, check if we're receiving data by checking buffered position
+        // Wait a short time and check if position/buffer has changed
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const position2 = await TP.getProgress();
+
+        // For live streams, buffered position should be increasing
+        // or position should be changing
+        const isProgressing =
+          position2.buffered > position1.buffered || position2.position !== position1.position;
+
+        if (!isProgressing) {
+          console.warn(
+            '[AudioService] Playback appears stalled:',
+            'pos1=',
+            position1.position,
+            'pos2=',
+            position2.position
+          );
+        }
+
+        // At this point we're in Playing state. Even if positions haven't changed,
+        // consider playback valid for live streams that may not report progress.
+        return true;
+      } catch (error) {
+        console.error('[AudioService] verifyPlayback error:', error);
+        return false;
+      }
+    },
+
+    // New: Reconnect to the last known stream
+    reconnectStream: async (): Promise<void> => {
+      if (lastStreamUrl === null || lastStreamTitle === null) {
+        console.log('[AudioService] No stream to reconnect to');
+        return;
+      }
+
+      console.log('[AudioService] Reconnecting to stream:', lastStreamTitle);
+
+      // Get the audioStore to trigger a proper playStream
+      // This is a simplified reconnect - the full implementation goes through audioStore
+      const track = {
+        id: 'live-stream',
+        url: lastStreamUrl,
+        title: lastStreamTitle,
+        artist: 'Nicecream.fm',
+        artwork: 'https://nicecream.fm/icon.png',
+        isLiveStream: true,
+      };
+
+      try {
+        await TP.load(track);
+        await TP.play();
+
+        // Verify playback started
+        const confirmed = await waitForState(State.Playing, 5000);
+        if (!confirmed) {
+          throw new Error('Reconnect failed - playback not confirmed');
+        }
+
+        console.log('[AudioService] Reconnect successful');
+      } catch (error) {
+        console.error('[AudioService] Reconnect failed:', error);
+        throw error;
+      }
+    },
+
+    // Seek to live edge for live streams
+    // For live streams, this reloads the stream to get to the current live position
+    seekToLive: async (): Promise<void> => {
+      if (lastStreamUrl === null || lastStreamTitle === null) {
+        console.log('[AudioService] No stream to seek to live');
+        return;
+      }
+
+      console.log('[AudioService] Seeking to live edge...');
+
+      const track = {
+        id: 'live-stream',
+        url: lastStreamUrl,
+        title: lastStreamTitle,
+        artist: 'Nicecream.fm',
+        artwork: 'https://nicecream.fm/icon.png',
+        isLiveStream: true,
+      };
+
+      try {
+        // For live streams, reload the track to jump to the live edge
+        await TP.setPlayWhenReady(false);
+        await TP.load(track);
+
+        // Wait for Ready state
+        const ready = await waitForState(State.Ready, 5000);
+        if (!ready) {
+          throw new Error('Failed to load stream for seek-to-live');
+        }
+
+        await TP.play();
+
+        // Verify playback started
+        const playing = await waitForState(State.Playing, 5000);
+        if (!playing) {
+          throw new Error('Failed to start playback after seek-to-live');
+        }
+
+        console.log('[AudioService] Seek to live successful');
+      } catch (error) {
+        console.error('[AudioService] Seek to live failed:', error);
+        throw error;
+      }
     },
   };
 };
@@ -343,6 +624,16 @@ export async function getAudioService(): Promise<AudioService> {
     audioServiceInstance = mockAudioService;
     return mockAudioService;
   }
+}
+
+// Export for cleanup
+export function destroyAudioService(): void {
+  if (audioServiceInstance !== null) {
+    audioServiceInstance.destroy();
+    audioServiceInstance = null;
+  }
+  // Also cleanup playback service listeners
+  cleanupPlaybackService();
 }
 
 export { isExpoGo };

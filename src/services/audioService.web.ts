@@ -8,6 +8,12 @@ interface AudioService {
   stop: () => Promise<void>;
   togglePlayback: () => Promise<boolean>;
   destroy: () => void;
+  // Enhanced lifecycle management methods
+  getPlaybackState: () => Promise<string>;
+  verifyPlayback: () => Promise<boolean>;
+  reconnectStream: () => Promise<void>;
+  // Live stream control
+  seekToLive: () => Promise<void>;
 }
 
 let audioElement: HTMLAudioElement | null = null;
@@ -252,6 +258,53 @@ const webAudioService: AudioService = {
     setupPromise = null;
     currentPlayRequestId = 0;
   },
+
+  // Web implementations of lifecycle methods (simplified for web platform)
+  getPlaybackState: (): Promise<string> => {
+    if (audioElement === null) return Promise.resolve('idle');
+    if (audioElement.paused) return Promise.resolve('paused');
+    if (isPlaying) return Promise.resolve('playing');
+    return Promise.resolve('idle');
+  },
+
+  verifyPlayback: (): Promise<boolean> => {
+    // On web, the audio element handles this automatically
+    return Promise.resolve(isPlaying && audioElement !== null && !audioElement.paused);
+  },
+
+  reconnectStream: async (): Promise<void> => {
+    // On web, if we have a source and it's paused, try to play again
+    if (audioElement !== null && audioElement.src !== '' && audioElement.paused) {
+      try {
+        await audioElement.play();
+        isPlaying = true;
+      } catch {
+        // Reconnect failed - will need user interaction
+      }
+    }
+  },
+
+  // Seek to live for web - reload the stream
+  seekToLive: async (): Promise<void> => {
+    if (audioElement === null || audioElement.src === '') {
+      return;
+    }
+
+    const currentSrc = audioElement.src;
+
+    // Reload the stream by resetting and replaying
+    audioElement.pause();
+    audioElement.src = '';
+    audioElement.load();
+    audioElement.src = currentSrc;
+
+    try {
+      await audioElement.play();
+      isPlaying = true;
+    } catch {
+      // Will need user interaction
+    }
+  },
 };
 
 let audioServiceInstance: AudioService | null = null;
@@ -263,6 +316,14 @@ export async function getAudioService(): Promise<AudioService> {
   audioServiceInstance = webAudioService;
   await audioServiceInstance.setup();
   return audioServiceInstance;
+}
+
+// Export for cleanup
+export function destroyAudioService(): void {
+  if (audioServiceInstance !== null) {
+    audioServiceInstance.destroy();
+    audioServiceInstance = null;
+  }
 }
 
 // Web is never "Expo Go"

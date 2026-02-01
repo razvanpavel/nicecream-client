@@ -11,12 +11,159 @@ let currentPlayAbortController: AbortController | null = null;
 // Transition timeout to prevent deadlock
 let transitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+// ============================================================================
+// Transition Mutex Pattern
+// Ensures only one transition can own state updates at a time
+// Uses a token-based approach for atomic-like behavior in single-threaded JS
+// ============================================================================
+
+// Current transition owner token (null = no active transition)
+let transitionOwnerToken: number | null = null;
+
+// Acquire transition lock - returns token if successful, null if already locked
+function acquireTransitionLock(requestId: number): number | null {
+  if (transitionOwnerToken !== null) {
+    console.log(
+      `[TransitionMutex] Lock denied - owned by request #${String(transitionOwnerToken)}`
+    );
+    return null;
+  }
+  transitionOwnerToken = requestId;
+  console.log(`[TransitionMutex] Lock acquired by request #${String(requestId)}`);
+  return requestId;
+}
+
+// Release transition lock - only the owner can release
+function releaseTransitionLock(token: number): boolean {
+  if (transitionOwnerToken !== token) {
+    console.warn(
+      `[TransitionMutex] Release denied - token ${String(token)} != owner ${String(transitionOwnerToken)}`
+    );
+    return false;
+  }
+  transitionOwnerToken = null;
+  console.log(`[TransitionMutex] Lock released by request #${String(token)}`);
+  return true;
+}
+
+// Force release lock (for timeout safety)
+function forceReleaseTransitionLock(): void {
+  if (transitionOwnerToken !== null) {
+    console.warn(
+      `[TransitionMutex] Force releasing lock from request #${String(transitionOwnerToken)}`
+    );
+    transitionOwnerToken = null;
+  }
+}
+
 // Helper to clear transition timeout
 function clearTransitionTimeout(): void {
   if (transitionTimeoutId !== null) {
     clearTimeout(transitionTimeoutId);
     transitionTimeoutId = null;
   }
+}
+
+// ============================================================================
+// Circuit Breaker Pattern
+// Prevents cascading failures by temporarily blocking requests after repeated failures
+// ============================================================================
+
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+interface CircuitBreaker {
+  state: CircuitState;
+  failureCount: number;
+  lastFailureTime: number | null;
+  successCount: number; // For HALF_OPEN state
+}
+
+// Circuit breaker configuration
+const CIRCUIT_BREAKER_CONFIG = {
+  failureThreshold: 5, // Open circuit after this many failures
+  resetTimeout: 30000, // Time to wait before trying again (30 seconds)
+  halfOpenSuccessThreshold: 2, // Successes needed in HALF_OPEN to close circuit
+};
+
+// Circuit breaker state
+let circuitBreaker: CircuitBreaker = {
+  state: 'CLOSED',
+  failureCount: 0,
+  lastFailureTime: null,
+  successCount: 0,
+};
+
+// Record a failure - may open the circuit
+function recordCircuitFailure(): void {
+  circuitBreaker.failureCount++;
+  circuitBreaker.lastFailureTime = Date.now();
+  circuitBreaker.successCount = 0;
+
+  if (circuitBreaker.failureCount >= CIRCUIT_BREAKER_CONFIG.failureThreshold) {
+    circuitBreaker.state = 'OPEN';
+    console.warn(
+      `[CircuitBreaker] Circuit OPENED after ${String(circuitBreaker.failureCount)} failures`
+    );
+  }
+}
+
+// Record a success - may close the circuit
+function recordCircuitSuccess(): void {
+  if (circuitBreaker.state === 'HALF_OPEN') {
+    circuitBreaker.successCount++;
+    if (circuitBreaker.successCount >= CIRCUIT_BREAKER_CONFIG.halfOpenSuccessThreshold) {
+      circuitBreaker.state = 'CLOSED';
+      circuitBreaker.failureCount = 0;
+      circuitBreaker.successCount = 0;
+      console.log('[CircuitBreaker] Circuit CLOSED - service recovered');
+    }
+  } else if (circuitBreaker.state === 'CLOSED') {
+    // Reset failure count on success
+    circuitBreaker.failureCount = 0;
+  }
+}
+
+// Check if request should be allowed
+function shouldAllowRequest(): boolean {
+  if (circuitBreaker.state === 'CLOSED') {
+    return true;
+  }
+
+  if (circuitBreaker.state === 'OPEN') {
+    // Check if enough time has passed to try again
+    const timeSinceLastFailure =
+      circuitBreaker.lastFailureTime !== null
+        ? Date.now() - circuitBreaker.lastFailureTime
+        : Infinity;
+
+    if (timeSinceLastFailure >= CIRCUIT_BREAKER_CONFIG.resetTimeout) {
+      circuitBreaker.state = 'HALF_OPEN';
+      circuitBreaker.successCount = 0;
+      console.log('[CircuitBreaker] Circuit HALF_OPEN - testing service');
+      return true;
+    }
+
+    console.log(
+      `[CircuitBreaker] Circuit OPEN - blocking request (retry in ${String(
+        Math.ceil((CIRCUIT_BREAKER_CONFIG.resetTimeout - timeSinceLastFailure) / 1000)
+      )}s)`
+    );
+    return false;
+  }
+
+  // HALF_OPEN - allow limited requests
+  return true;
+}
+
+// Reset circuit breaker (e.g., when user manually retries)
+function resetCircuitBreaker(): void {
+  circuitBreaker = {
+    state: 'CLOSED',
+    failureCount: 0,
+    lastFailureTime: null,
+    successCount: 0,
+  };
+  console.log('[CircuitBreaker] Circuit manually reset');
 }
 
 type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
@@ -59,6 +206,7 @@ interface AudioState {
   playStream: (url: string, stationName: string) => Promise<void>;
   togglePlayback: () => Promise<void>;
   stop: () => Promise<void>;
+  seekToLive: () => Promise<void>;
   setStreamMetadata: (metadata: StreamMetadata) => void;
   setTrackPlayerAvailable: (available: boolean) => void;
   setUserInteracted: () => void;
@@ -175,6 +323,25 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       return;
     }
 
+    // Circuit breaker check - prevent cascading failures
+    if (!shouldAllowRequest()) {
+      const timeSinceLastFailure =
+        circuitBreaker.lastFailureTime !== null ? Date.now() - circuitBreaker.lastFailureTime : 0;
+      const retryIn = Math.ceil(
+        (CIRCUIT_BREAKER_CONFIG.resetTimeout - timeSinceLastFailure) / 1000
+      );
+
+      set({
+        status: 'error',
+        error: {
+          message: `Too many failures. Retry in ${String(retryIn)}s`,
+          category: 'network',
+          isRetryable: true,
+        },
+      });
+      return;
+    }
+
     // Abort any in-flight play request
     if (currentPlayAbortController !== null) {
       currentPlayAbortController.abort();
@@ -203,11 +370,21 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       clearTimeout(transitionTimeoutId);
     }
 
+    // Acquire transition lock
+    const lockToken = acquireTransitionLock(thisRequestId);
+    if (lockToken === null) {
+      // Another transition is in progress, but our AbortController already cancelled it
+      // Force release and retry
+      forceReleaseTransitionLock();
+      acquireTransitionLock(thisRequestId);
+    }
+
     // Safety timeout to prevent deadlock if something goes wrong
     transitionTimeoutId = setTimeout(() => {
       const state = get();
       if (state.isTransitioning) {
-        console.warn('[AudioStore] Transition timeout - clearing flag');
+        console.warn('[AudioStore] Transition timeout - clearing flag and releasing lock');
+        forceReleaseTransitionLock();
         set({ isTransitioning: false });
       }
     }, 15000); // 15 second timeout
@@ -251,6 +428,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
         // Success - clear any retry state and end transition
         clearTransitionTimeout();
+        releaseTransitionLock(thisRequestId);
+        recordCircuitSuccess(); // Circuit breaker: record success
         set({
           status: 'playing',
           retryCount: 0,
@@ -275,6 +454,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         // Don't retry non-retryable errors
         if (!lastError.isRetryable) {
           clearTransitionTimeout();
+          releaseTransitionLock(thisRequestId);
           set({
             status: 'error',
             error: lastError,
@@ -316,6 +496,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
     // All retries exhausted
     clearTransitionTimeout();
+    releaseTransitionLock(thisRequestId);
+    recordCircuitFailure(); // Circuit breaker: record failure
     if (lastError !== null) {
       set({
         status: 'error',
@@ -407,6 +589,32 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     }
   },
 
+  seekToLive: async (): Promise<void> => {
+    const { status } = get();
+
+    // Only seek to live if we're playing or paused
+    if (status !== 'playing' && status !== 'paused') {
+      return;
+    }
+
+    if (isExpoGo) {
+      console.log('[Expo Go] Would seek to live');
+      return;
+    }
+
+    set({ status: 'loading' });
+
+    try {
+      const audioService = await getAudioService();
+      await audioService.seekToLive();
+      set({ status: 'playing' });
+    } catch (error) {
+      const categorized = categorizeError(error);
+      console.error('Failed to seek to live:', error);
+      set({ status: 'error', error: categorized });
+    }
+  },
+
   setStreamMetadata: (metadata: StreamMetadata): void => {
     set({ streamMetadata: metadata });
   },
@@ -435,6 +643,9 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     if (currentStreamUrl === null || currentStreamName === null) {
       return;
     }
+
+    // Reset circuit breaker on manual retry - user explicitly wants to try again
+    resetCircuitBreaker();
 
     // Don't retry non-retryable errors without user explicitly triggering
     if (error !== null && !error.isRetryable) {
