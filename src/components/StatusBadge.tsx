@@ -87,11 +87,7 @@ export function StatusBadge(): React.ReactElement | null {
   }
 
   return (
-    <View
-      className="absolute left-4"
-      style={{ top: insets.top + 16 }}
-      pointerEvents="box-none"
-    >
+    <View className="absolute left-4" style={{ top: insets.top + 16 }} pointerEvents="box-none">
       {content}
     </View>
   );

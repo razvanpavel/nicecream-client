@@ -152,7 +152,9 @@ const createRealAudioService = async (): Promise<AudioService> => {
       const t0 = Date.now();
       const elapsed = (): string => `+${String(Date.now() - t0)}ms`;
 
-      console.log(`[AudioService] ${elapsed()} play() called — request #${String(thisRequestId)}, url=${url}`);
+      console.log(
+        `[AudioService] ${elapsed()} play() called — request #${String(thisRequestId)}, url=${url}`
+      );
 
       // Use signal if provided, otherwise fall back to request ID comparison
       const isCancelled = (): boolean =>
@@ -191,7 +193,9 @@ const createRealAudioService = async (): Promise<AudioService> => {
         // Stream switch: explicitly clear playWhenReady before load() to prevent
         // it from auto-playing into a broken CoreAudio state. The subsequent
         // play() call will start from Ready — the same reliable path as cold start.
-        console.log(`[AudioService] ${elapsed()} Stream switch — calling setPlayWhenReady(false)...`);
+        console.log(
+          `[AudioService] ${elapsed()} Stream switch — calling setPlayWhenReady(false)...`
+        );
         await TP.setPlayWhenReady(false);
         console.log(`[AudioService] ${elapsed()} setPlayWhenReady done, calling load()...`);
         await TP.load(track);
