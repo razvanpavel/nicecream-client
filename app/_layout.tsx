@@ -10,6 +10,7 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClient } from '@/api/queryClient';
+import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { getAudioService, isExpoGo } from '@/services/audioService';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
@@ -47,6 +48,9 @@ void SplashScreen.preventAutoHideAsync();
 export default function RootLayout(): React.ReactElement | null {
   const setPlayerSetup = useAppStore((state) => state.setPlayerSetup);
   const setTrackPlayerAvailable = useAudioStore((state) => state.setTrackPlayerAvailable);
+
+  // Poll now playing API when streaming
+  useNowPlaying();
 
   const [fontsLoaded] = useFonts({
     'AlteHaasGrotesk-Bold': AlteHaasGroteskBold,

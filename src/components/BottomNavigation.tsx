@@ -7,6 +7,7 @@ import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons';
+import { Text } from './ui';
 
 interface BottomNavigationProps {
   onPrevious?: () => void;
@@ -18,7 +19,7 @@ export function BottomNavigation({
   onNext,
 }: BottomNavigationProps): React.ReactElement {
   const insets = useSafeAreaInsets();
-  const { status, currentStreamUrl, togglePlayback, playStream } = useAudioStore();
+  const { status, currentStreamUrl, streamMetadata, togglePlayback, playStream } = useAudioStore();
   const isPlayerSetup = useAppStore((state) => state.isPlayerSetup);
   const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
 
@@ -30,7 +31,8 @@ export function BottomNavigation({
       ? currentStreamUrl === currentStream.url
       : false;
   const isPlaying = status === 'playing' && isCurrentStreamActive;
-  const isLoading = (status === 'loading' && isCurrentStreamActive) || (!isPlayerSetup && !isExpoGo);
+  const isLoading =
+    (status === 'loading' && isCurrentStreamActive) || (!isPlayerSetup && !isExpoGo);
 
   const handlePlayPause = (): void => {
     if (currentStream === undefined) return;
@@ -50,12 +52,38 @@ export function BottomNavigation({
     onNext?.();
   };
 
+  // Show track info only when playing and metadata is available
+  const showTrackInfo = isPlaying && streamMetadata !== null;
+
   return (
     <View
       className="absolute bottom-0 left-0 right-0 items-center justify-center"
       style={{ paddingBottom: insets.bottom + 16 }}
       pointerEvents="box-none"
     >
+      {/* Track Info */}
+      {showTrackInfo && (
+        <View className="mb-6 items-center px-8">
+          {streamMetadata.title != null && streamMetadata.title !== '-' && (
+            <Text
+              className="text-center font-heading text-lg uppercase text-white"
+              numberOfLines={1}
+            >
+              {streamMetadata.title}
+            </Text>
+          )}
+          {streamMetadata.artist != null && streamMetadata.artist !== '-' && (
+            <Text
+              className="text-center font-body text-base uppercase text-white/90"
+              numberOfLines={1}
+            >
+              {streamMetadata.artist}
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* Playback Controls */}
       <View className="flex-row items-center justify-center gap-4">
         {/* Previous Button */}
         <Pressable

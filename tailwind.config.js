@@ -14,6 +14,7 @@ module.exports = {
       },
       fontFamily: {
         heading: ['AlteHaasGrotesk-Bold'],
+        body: ['AlteHaasGrotesk-Regular'],
       },
       fontSize: {
         '10xl': ['8.75rem', { lineHeight: '1.1' }],

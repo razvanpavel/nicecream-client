@@ -1,6 +1,9 @@
 import { useCallback, useRef } from 'react';
-import { Platform, View } from 'react-native';
-import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager-view';
+import { View } from 'react-native';
+import PagerView, {
+  type PagerViewOnPageSelectedEvent,
+  type PageScrollStateChangedNativeEvent,
+} from 'react-native-pager-view';
 
 import { STREAMS, type StreamConfig, getDefaultStreamIndex } from '@/config/streams';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -9,6 +12,7 @@ import { useAudioStore } from '@/store/audioStore';
 
 import { BottomNavigation } from './BottomNavigation';
 import { ChannelScreen } from './ChannelScreen';
+import { StatusBadge } from './StatusBadge';
 
 // For infinite scroll: [Blue, Red, Green, Blue, Red]
 // Build pages using indices - STREAMS array has exactly 3 elements [red, green, blue]
@@ -60,8 +64,21 @@ export function SwipePager(): React.ReactElement {
   // Track current page for navigation
   const currentPageRef = useRef(initialPage);
 
+  // Trigger haptic when swipe starts settling (before animation completes)
+  const handlePageScrollStateChanged = useCallback(
+    (event: PageScrollStateChangedNativeEvent): void => {
+      const state = event.nativeEvent.pageScrollState;
+
+      // 'settling' = user lifted finger, animation starting
+      if (state === 'settling' && !isJumpingRef.current) {
+        void haptics.medium();
+      }
+    },
+    [haptics]
+  );
+
   const handlePageSelected = useCallback(
-    async (event: PagerViewOnPageSelectedEvent): Promise<void> => {
+    (event: PagerViewOnPageSelectedEvent): void => {
       const position = event.nativeEvent.position;
       currentPageRef.current = position;
 
@@ -69,11 +86,6 @@ export function SwipePager(): React.ReactElement {
       if (isJumpingRef.current) {
         isJumpingRef.current = false;
         return;
-      }
-
-      // Trigger haptic feedback (native only)
-      if (Platform.OS !== 'web') {
-        await haptics.medium();
       }
 
       // Sync stream index for background image hook
@@ -114,7 +126,7 @@ export function SwipePager(): React.ReactElement {
         void playStream(stream.url, stream.name);
       }
     },
-    [haptics, playStream, setCurrentStreamIndex]
+    [playStream, setCurrentStreamIndex]
   );
 
   const handlePrevious = useCallback((): void => {
@@ -139,9 +151,8 @@ export function SwipePager(): React.ReactElement {
         // eslint-disable-next-line react-native/no-inline-styles
         style={{ flex: 1 }}
         initialPage={initialPage}
-        onPageSelected={(e) => {
-          void handlePageSelected(e);
-        }}
+        onPageSelected={handlePageSelected}
+        onPageScrollStateChanged={handlePageScrollStateChanged}
         overdrag={true}
       >
         {INFINITE_PAGES.map((stream, index) => (
@@ -150,6 +161,9 @@ export function SwipePager(): React.ReactElement {
           </View>
         ))}
       </PagerView>
+
+      {/* Fixed Status Badge */}
+      <StatusBadge />
 
       {/* Fixed Bottom Navigation */}
       <BottomNavigation onPrevious={handlePrevious} onNext={handleNext} />
