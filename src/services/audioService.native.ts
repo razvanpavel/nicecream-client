@@ -1,8 +1,6 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-import { cleanupPlaybackService } from './playbackService.native';
-
-// Check if running in Expo Go
+// Check if running in Expo Go - must be checked BEFORE any native module imports
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 interface AudioService {
@@ -632,8 +630,12 @@ export function destroyAudioService(): void {
     audioServiceInstance.destroy();
     audioServiceInstance = null;
   }
-  // Also cleanup playback service listeners
-  cleanupPlaybackService();
+  // Also cleanup playback service listeners (only if not in Expo Go)
+  if (!isExpoGo) {
+    void import('./playbackService.native').then(({ cleanupPlaybackService }) => {
+      cleanupPlaybackService();
+    });
+  }
 }
 
 export { isExpoGo };
