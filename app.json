@@ -8,9 +8,9 @@
     "scheme": "nicecream",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F5F5F5"
     },
     "ios": {
       "supportsTablet": true,
@@ -20,12 +20,28 @@
         "UIBackgroundModes": [
           "audio"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": [
+          "spotify",
+          "music",
+          "youtube",
+          "vnd.youtube.music"
+        ]
       },
       "associatedDomains": [
         "applinks:nicecream.fm",
         "applinks:www.nicecream.fm"
-      ]
+      ],
+      "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#F5F5F5",
+        "dark": {
+          "image": "./assets/images/splash-dark.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1A1A1A"
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -61,7 +77,17 @@
             "DEFAULT"
           ]
         }
-      ]
+      ],
+      "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#F5F5F5",
+        "dark": {
+          "image": "./assets/images/splash-dark.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1A1A1A"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
@@ -69,7 +95,19 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      ["expo-router", { "origin": "https://nicecream.fm" }]
+      ["expo-router", { "origin": "https://nicecream.fm" }],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "backgroundColor": "#F5F5F5",
+          "dark": {
+            "image": "./assets/images/splash-icon-dark.png",
+            "backgroundColor": "#1A1A1A"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

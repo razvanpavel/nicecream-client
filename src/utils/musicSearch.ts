@@ -1,11 +1,11 @@
-import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 
 export type MusicService = 'spotify' | 'apple' | 'youtube';
 
 /**
  * Generate a Spotify search URL for the given query
- * Format: https://open.spotify.com/search/{encoded_query}
+ * Uses Universal Links format - opens in app if installed, otherwise browser
  */
 export function getSpotifySearchUrl(query: string): string {
   const encoded = encodeURIComponent(query);
@@ -13,17 +13,22 @@ export function getSpotifySearchUrl(query: string): string {
 }
 
 /**
- * Generate an Apple Music search URL for the given query
- * Apple Music uses 'term' query parameter
+ * Generate Apple Music search URLs
+ * Returns both native scheme and web fallback
  */
-export function getAppleMusicSearchUrl(query: string): string {
+export function getAppleMusicSearchUrls(query: string): { native: string; web: string } {
   const encoded = encodeURIComponent(query);
-  return `https://music.apple.com/us/search?term=${encoded}`;
+  return {
+    // Native URL scheme - opens directly in Apple Music app
+    native: `music://music.apple.com/us/search?term=${encoded}`,
+    // Web fallback - Universal Links may also open the app
+    web: `https://music.apple.com/us/search?term=${encoded}`,
+  };
 }
 
 /**
  * Generate a YouTube Music search URL for the given query
- * YouTube Music uses 'q' query parameter
+ * Uses Universal Links format - opens in app if installed, otherwise browser
  */
 export function getYouTubeMusicSearchUrl(query: string): string {
   const encoded = encodeURIComponent(query);
@@ -36,6 +41,22 @@ export function getYouTubeMusicSearchUrl(query: string): string {
 function buildSearchQuery(artist: string, title: string): string {
   const parts = [artist, title].filter((part) => part.trim() !== '' && part !== '-');
   return parts.join(' ').trim();
+}
+
+/**
+ * Try to open a URL, returns true if successful
+ */
+async function tryOpenUrl(url: string): Promise<boolean> {
+  try {
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      await Linking.openURL(url);
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -53,28 +74,54 @@ export async function openMusicSearch(
     return;
   }
 
-  let url: string;
-  switch (service) {
-    case 'spotify':
-      url = getSpotifySearchUrl(query);
-      break;
-    case 'apple':
-      url = getAppleMusicSearchUrl(query);
-      break;
-    case 'youtube':
-      url = getYouTubeMusicSearchUrl(query);
-      break;
-  }
-
-  console.log(`[musicSearch] Opening ${service}: ${url}`);
+  console.log(`[musicSearch] Searching for: "${query}" on ${service}`);
 
   try {
     if (Platform.OS === 'web') {
       // On web, open in a new tab
+      let url: string;
+      switch (service) {
+        case 'spotify':
+          url = getSpotifySearchUrl(query);
+          break;
+        case 'apple':
+          url = getAppleMusicSearchUrls(query).web;
+          break;
+        case 'youtube':
+          url = getYouTubeMusicSearchUrl(query);
+          break;
+      }
       window.open(url, '_blank', 'noopener,noreferrer');
-    } else {
-      // On native, use WebBrowser which handles URL opening more reliably
-      await WebBrowser.openBrowserAsync(url);
+      return;
+    }
+
+    // Native platforms
+    switch (service) {
+      case 'spotify': {
+        const url = getSpotifySearchUrl(query);
+        console.log(`[musicSearch] Opening Spotify: ${url}`);
+        await Linking.openURL(url);
+        break;
+      }
+
+      case 'apple': {
+        const urls = getAppleMusicSearchUrls(query);
+        // Try native scheme first (music://), then fall back to web URL
+        console.log(`[musicSearch] Trying Apple Music native: ${urls.native}`);
+        const nativeOpened = await tryOpenUrl(urls.native);
+        if (!nativeOpened) {
+          console.log(`[musicSearch] Falling back to Apple Music web: ${urls.web}`);
+          await Linking.openURL(urls.web);
+        }
+        break;
+      }
+
+      case 'youtube': {
+        const url = getYouTubeMusicSearchUrl(query);
+        console.log(`[musicSearch] Opening YouTube Music: ${url}`);
+        await Linking.openURL(url);
+        break;
+      }
     }
   } catch (error) {
     console.error('[musicSearch] Failed to open URL:', error);
