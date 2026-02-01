@@ -61,7 +61,7 @@ export function ActionSheet({
             {/* Title */}
             {title !== undefined && title !== '' && (
               <View className="border-b border-neutral-800 px-4 py-3">
-                <Text className="text-center text-sm uppercase text-neutral-400">{title}</Text>
+                <Text className="text-center text-sm text-neutral-400">{title}</Text>
               </View>
             )}
 
