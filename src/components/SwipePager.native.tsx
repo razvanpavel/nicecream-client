@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { View } from 'react-native';
 import PagerView, {
   type PagerViewOnPageSelectedEvent,
@@ -71,17 +71,6 @@ export function SwipePager(): React.ReactElement {
   const isJumpingRef = useRef(false);
   // Track current page for navigation
   const currentPageRef = useRef(initialPage);
-  // Debounce stream switching to prevent rapid-fire switches during fast swiping
-  const pendingStreamSwitchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Cleanup pending timeout on unmount
-  useEffect(() => {
-    return (): void => {
-      if (pendingStreamSwitchRef.current !== null) {
-        clearTimeout(pendingStreamSwitchRef.current);
-      }
-    };
-  }, []);
 
   // Trigger haptic when swipe starts settling (before animation completes)
   const handlePageScrollStateChanged = useCallback(
@@ -101,65 +90,46 @@ export function SwipePager(): React.ReactElement {
       const position = event.nativeEvent.position;
       currentPageRef.current = position;
 
-      // Cancel any pending stream switch from rapid swiping
-      if (pendingStreamSwitchRef.current !== null) {
-        clearTimeout(pendingStreamSwitchRef.current);
-        pendingStreamSwitchRef.current = null;
-      }
-
-      // If this is from a programmatic jump, skip stream switching logic
+      // If this event is from a programmatic jump (setPageWithoutAnimation),
+      // we've already handled the stream switch - just update refs and return
       if (isJumpingRef.current) {
         isJumpingRef.current = false;
         return;
       }
 
-      // Sync stream index for background image hook
-      const streamIndex = pageToStreamIndex(position);
-      setCurrentStreamIndex(streamIndex);
+      // Determine the effective stream position
+      // For boundaries, this is the "real" page we're jumping to
+      let effectivePosition = position;
+      let needsJump = false;
 
-      // Handle infinite scroll boundaries (immediate jump, debounced stream switch)
       if (position === 0) {
-        isJumpingRef.current = true;
-        pagerRef.current?.setPageWithoutAnimation(3);
-        currentPageRef.current = 3;
-        // Debounce the stream switch to handle rapid boundary jumps
-        pendingStreamSwitchRef.current = setTimeout(() => {
-          const stream = INFINITE_PAGES[3];
-          const currentStatus = useAudioStore.getState().status;
-          if (
-            (currentStatus === 'playing' || currentStatus === 'loading') &&
-            stream !== undefined
-          ) {
-            void playStream(stream.url, stream.name);
-          }
-        }, 150);
-        return;
+        // Blue boundary -> will jump to page 3 (Blue)
+        effectivePosition = 3;
+        needsJump = true;
       } else if (position === 4) {
-        isJumpingRef.current = true;
-        pagerRef.current?.setPageWithoutAnimation(1);
-        currentPageRef.current = 1;
-        // Debounce the stream switch to handle rapid boundary jumps
-        pendingStreamSwitchRef.current = setTimeout(() => {
-          const stream = INFINITE_PAGES[1];
-          const currentStatus = useAudioStore.getState().status;
-          if (
-            (currentStatus === 'playing' || currentStatus === 'loading') &&
-            stream !== undefined
-          ) {
-            void playStream(stream.url, stream.name);
-          }
-        }, 150);
-        return;
+        // Red boundary -> will jump to page 1 (Red)
+        effectivePosition = 1;
+        needsJump = true;
       }
 
-      // Debounce the actual stream switch to prevent rapid-fire switches
-      pendingStreamSwitchRef.current = setTimeout(() => {
-        const currentStatus = useAudioStore.getState().status;
-        const stream = INFINITE_PAGES[position];
-        if ((currentStatus === 'playing' || currentStatus === 'loading') && stream !== undefined) {
-          void playStream(stream.url, stream.name);
-        }
-      }, 150);
+      // Sync stream index for logo (always based on effective position)
+      const streamIndex = pageToStreamIndex(effectivePosition);
+      setCurrentStreamIndex(streamIndex);
+
+      // Switch stream - audioStore handles cancellation internally
+      const { status } = useAudioStore.getState();
+      const stream = INFINITE_PAGES[effectivePosition];
+
+      if ((status === 'playing' || status === 'loading') && stream !== undefined) {
+        void playStream(stream.url, stream.name);
+      }
+
+      // Perform the visual jump AFTER initiating stream switch
+      if (needsJump) {
+        isJumpingRef.current = true;
+        pagerRef.current?.setPageWithoutAnimation(effectivePosition);
+        currentPageRef.current = effectivePosition;
+      }
     },
     [playStream, setCurrentStreamIndex]
   );

@@ -365,10 +365,12 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
     // Update state to loading and mark as transitioning
     // isTransitioning prevents playbackService from overwriting our state
+    // Clear streamMetadata to prevent flash of old track info during switch
     set({
       status: 'loading',
       currentStreamUrl: url,
       currentStreamName: stationName,
+      streamMetadata: null,
       error: null,
       hasUserInteracted: true,
       retryCount: 0,
@@ -392,13 +394,26 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     }
 
     // Acquire transition lock
-    const lockToken = acquireTransitionLock(thisRequestId);
+    let lockToken = acquireTransitionLock(thisRequestId);
     if (lockToken === null) {
-      // Another transition is in progress, but our AbortController already cancelled it
-      // Force release after another small delay to ensure cleanup
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      forceReleaseTransitionLock();
-      acquireTransitionLock(thisRequestId);
+      // Lock is held by another request, but we already aborted it.
+      // Wait briefly for abort to propagate, then retry once.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Check if we were superseded during the wait
+      if (thisRequestId !== currentPlayRequestId) {
+        set({ isTransitioning: false });
+        return;
+      }
+
+      // Try to acquire lock again (previous request should have released by now)
+      lockToken = acquireTransitionLock(thisRequestId);
+      if (lockToken === null) {
+        // Still locked - something is wrong, bail out
+        console.warn('[AudioStore] Lock still held after abort+wait, abandoning request');
+        set({ status: 'idle', isTransitioning: false, error: null });
+        return;
+      }
     }
 
     // Safety timeout to prevent deadlock if something goes wrong
@@ -407,7 +422,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       if (state.isTransitioning) {
         console.warn('[AudioStore] Transition timeout - clearing flag and releasing lock');
         forceReleaseTransitionLock();
-        set({ isTransitioning: false });
+        // Set to idle to prevent stuck state
+        set({ status: 'idle', isTransitioning: false, error: null });
       }
     }, 15000); // 15 second timeout
 
@@ -418,11 +434,13 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       // Check if this request was superseded
       if (thisRequestId !== currentPlayRequestId) {
         clearTransitionTimeout();
+        releaseTransitionLock(thisRequestId);
         return;
       }
 
       console.log(`[Expo Go] Would play: ${stationName}`);
       clearTransitionTimeout();
+      releaseTransitionLock(thisRequestId);
       set({ status: 'playing', isTransitioning: false });
       return;
     }
@@ -436,6 +454,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         // Check if this request was superseded
         if (thisRequestId !== currentPlayRequestId) {
           clearTransitionTimeout();
+          releaseTransitionLock(thisRequestId);
           return;
         }
 
@@ -445,6 +464,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         // Check if this request was superseded
         if (thisRequestId !== currentPlayRequestId) {
           clearTransitionTimeout();
+          releaseTransitionLock(thisRequestId);
           return;
         }
 
@@ -464,6 +484,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         // Check if this request was superseded
         if (thisRequestId !== currentPlayRequestId) {
           clearTransitionTimeout();
+          releaseTransitionLock(thisRequestId);
           return;
         }
 
@@ -511,6 +532,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         // Check if superseded after delay
         if (thisRequestId !== currentPlayRequestId) {
           clearTransitionTimeout();
+          releaseTransitionLock(thisRequestId);
           return;
         }
       }

@@ -321,6 +321,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
       }
 
       if (isCancelled()) {
+        console.log(`[AudioService] ${elapsed()} Cancelled after load, cleaning up`);
+        await TP.setPlayWhenReady(false);
         return;
       }
 
@@ -334,6 +336,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
       console.log(`[AudioService] ${elapsed()} Waiting for Ready state before playing...`);
       while (Date.now() - t0 < PLAY_TIMEOUT) {
         if (isCancelled()) {
+          console.log(`[AudioService] ${elapsed()} Cancelled during Ready wait, cleaning up`);
+          await TP.setPlayWhenReady(false);
           return;
         }
 
@@ -367,6 +371,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
       while (Date.now() - t0 < PLAY_TIMEOUT) {
         if (isCancelled()) {
+          console.log(`[AudioService] ${elapsed()} Cancelled during Playing confirm, cleaning up`);
+          await TP.setPlayWhenReady(false);
           return;
         }
 

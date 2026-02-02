@@ -111,11 +111,17 @@ const webAudioService: AudioService = {
 
       // Handle buffering states
       addAudioEventListener('waiting', () => {
+        // Skip state updates during controlled transitions
+        const { isTransitioning } = getStore().getState();
+        if (isTransitioning) return;
         getStore().setState({ status: 'loading' });
       });
 
       addAudioEventListener('playing', () => {
         isPlaying = true;
+        // Skip state updates during controlled transitions
+        const { isTransitioning } = getStore().getState();
+        if (isTransitioning) return;
         getStore().setState({ status: 'playing' });
       });
 

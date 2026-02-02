@@ -299,6 +299,12 @@ async function initRealPlaybackService(): Promise<void> {
   // Handle metadata updates (for Icecast streams that send track info)
   eventSubscriptions.push(
     TP.addEventListener(Event.MetadataCommonReceived, (event) => {
+      // Skip metadata updates during stream transitions to prevent flash of old content
+      const { isTransitioning } = useAudioStore.getState();
+      if (isTransitioning) {
+        return;
+      }
+
       const streamMetadata: { title?: string; artist?: string } = {};
 
       if (event.metadata.title !== undefined) {
