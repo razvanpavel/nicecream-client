@@ -12,7 +12,7 @@ import { useAudioStore } from '@/store/audioStore';
 
 import { BottomNavigation } from './BottomNavigation';
 import { ChannelScreen } from './ChannelScreen';
-import { StatusBadge } from './StatusBadge';
+// import { StatusBadge } from './StatusBadge';
 
 // For infinite scroll: [Blue, Red, Green, Blue, Red]
 // Build pages using indices - STREAMS array has exactly 3 elements [red, green, blue]
@@ -163,7 +163,7 @@ export function SwipePager(): React.ReactElement {
       </PagerView>
 
       {/* Fixed Status Badge */}
-      <StatusBadge />
+      {/* <StatusBadge /> */}
 
       {/* Fixed Bottom Navigation */}
       <BottomNavigation onPrevious={handlePrevious} onNext={handleNext} />

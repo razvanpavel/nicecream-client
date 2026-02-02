@@ -176,8 +176,24 @@ const createRealAudioService = async (): Promise<AudioService> => {
           //   - 0 for live streams (no seeking backwards needed)
           backBuffer: 0,
 
-          // Auto-handle audio interruptions (phone calls, Siri, etc.)
-          autoHandleInterruptions: true,
+          // =======================================================================
+          // Audio Interruption Handling
+          // =======================================================================
+          // DISABLED: We handle interruptions manually in playbackService.native.ts
+          // via the RemoteDuck event. This gives us full control over the
+          // wasPlayingBeforeDuck smart resume logic.
+          //
+          // If autoHandleInterruptions is true, TrackPlayer automatically pauses/resumes
+          // on interruption, which can conflict with our manual handling and cause:
+          // - Double pause (pause twice, resume once = stuck paused)
+          // - Race conditions between automatic and manual handling
+          //
+          // With manual control, we can:
+          // - Track wasPlayingBeforeDuck state accurately
+          // - Decide when to resume vs stay paused after interruption
+          // - Handle permanent vs temporary audio focus loss differently
+          // =======================================================================
+          autoHandleInterruptions: false,
         });
         console.log('[AudioService] setupPlayer complete');
 

@@ -5,7 +5,7 @@ import { Platform, View } from 'react-native';
 
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { ChannelScreen } from '@/components/ChannelScreen';
-import { StatusBadge } from '@/components/StatusBadge';
+// import { StatusBadge } from '@/components/StatusBadge';
 import { STREAMS } from '@/config/streams';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
@@ -164,7 +164,7 @@ export default function ChannelRoute(): React.ReactElement {
         <ChannelScreen stream={stream} />
 
         {/* Fixed Status Badge */}
-        <StatusBadge />
+        {/* <StatusBadge /> */}
 
         {/* Fixed Bottom Navigation */}
         <BottomNavigation onPrevious={handlePrevious} onNext={handleNext} />

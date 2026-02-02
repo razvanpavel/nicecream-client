@@ -342,6 +342,16 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       return;
     }
 
+    // HTTPS validation warning for development
+    // Android blocks HTTP URLs in production builds by default (cleartext traffic)
+    // This helps catch potential silent failures before they reach production
+    if (__DEV__ && !url.startsWith('https://')) {
+      console.warn(
+        '[AudioStore] WARNING: HTTP URLs may fail in production Android builds. ' +
+          'Android blocks cleartext traffic by default. Use HTTPS for reliable playback.'
+      );
+    }
+
     // Abort any in-flight play request
     if (currentPlayAbortController !== null) {
       currentPlayAbortController.abort();

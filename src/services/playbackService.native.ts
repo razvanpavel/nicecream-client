@@ -92,26 +92,20 @@ async function initRealPlaybackService(): Promise<void> {
   const { useAudioStore } = await import('@/store/audioStore');
 
   // Remote play (from notification, lock screen, headphones)
+  // For live streams, we ALWAYS reload - the buffer may be stale after pause/stop.
+  // Unlike on-demand content, live streams can't simply "resume" from a paused position.
   eventSubscriptions.push(
-    TP.addEventListener(Event.RemotePlay, async () => {
+    TP.addEventListener(Event.RemotePlay, () => {
       try {
-        const activeTrack = await TP.getActiveTrack();
+        const store = useAudioStore.getState();
+        const { currentStreamUrl, currentStreamName } = store;
 
-        if (activeTrack != null) {
-          // Track loaded - just resume
-          await TP.play();
+        if (currentStreamUrl !== null && currentStreamName !== null) {
+          console.log('[PlaybackService] RemotePlay - reloading live stream');
+          // Always reload the stream to get fresh audio data
+          void store.playStream(currentStreamUrl, currentStreamName);
         } else {
-          // No track - need to reload the stream (happens after RemoteStop)
-          const store = useAudioStore.getState();
-          const { currentStreamUrl, currentStreamName } = store;
-
-          if (currentStreamUrl !== null && currentStreamName !== null) {
-            console.log('[PlaybackService] RemotePlay - reloading stream');
-            // Use playStream to properly reload and sync state
-            void store.playStream(currentStreamUrl, currentStreamName);
-          } else {
-            console.warn('[PlaybackService] RemotePlay - no stream to resume');
-          }
+          console.warn('[PlaybackService] RemotePlay - no stream to resume');
         }
       } catch (e: unknown) {
         console.error('[PlaybackService] RemotePlay failed:', e);
