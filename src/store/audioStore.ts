@@ -352,7 +352,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       );
     }
 
-    // Abort any in-flight play request
+    // Abort any in-flight play request and give it time to clean up
+    const hadPreviousRequest = currentPlayAbortController !== null;
     if (currentPlayAbortController !== null) {
       currentPlayAbortController.abort();
     }
@@ -380,11 +381,22 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       clearTimeout(transitionTimeoutId);
     }
 
+    // If we aborted a previous request, give it a moment to clean up
+    // This prevents race conditions where the audio service is still processing
+    if (hadPreviousRequest) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Check if this request was superseded during the wait
+      if (thisRequestId !== currentPlayRequestId) {
+        return;
+      }
+    }
+
     // Acquire transition lock
     const lockToken = acquireTransitionLock(thisRequestId);
     if (lockToken === null) {
       // Another transition is in progress, but our AbortController already cancelled it
-      // Force release and retry
+      // Force release after another small delay to ensure cleanup
+      await new Promise((resolve) => setTimeout(resolve, 50));
       forceReleaseTransitionLock();
       acquireTransitionLock(thisRequestId);
     }

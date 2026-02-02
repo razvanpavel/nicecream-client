@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { STREAMS, getDefaultStreamIndex } from '@/config/streams';
+import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 import { cn } from '@/utils/cn';
 
@@ -12,6 +13,7 @@ import { CaretRight } from './icons/CaretRight';
 export function SwipePager(): React.ReactElement {
   const [currentIndex, setCurrentIndex] = useState(getDefaultStreamIndex);
   const playStream = useAudioStore((state) => state.playStream);
+  const setCurrentStreamIndex = useAppStore((state) => state.setCurrentStreamIndex);
 
   const goToIndex = useCallback(
     (newIndex: number): void => {
@@ -22,6 +24,8 @@ export function SwipePager(): React.ReactElement {
         targetIndex = 0;
       }
       setCurrentIndex(targetIndex);
+      // Sync with app store for global state consistency
+      setCurrentStreamIndex(targetIndex);
 
       // Get fresh status from store (not from closure)
       const currentStatus = useAudioStore.getState().status;
@@ -32,7 +36,7 @@ export function SwipePager(): React.ReactElement {
         void playStream(stream.url, stream.name);
       }
     },
-    [playStream]
+    [playStream, setCurrentStreamIndex]
   );
 
   const currentStream = STREAMS[currentIndex];

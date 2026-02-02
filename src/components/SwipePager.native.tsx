@@ -1,13 +1,15 @@
-import { useCallback, useRef } from 'react';
+import { Image } from 'expo-image';
+import { useCallback, useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import PagerView, {
   type PagerViewOnPageSelectedEvent,
   type PageScrollStateChangedNativeEvent,
 } from 'react-native-pager-view';
 
+import { CHANNEL_LOGOS } from '@/config/logos';
 import { STREAMS, type StreamConfig, getDefaultStreamIndex } from '@/config/streams';
 import { useHaptics } from '@/hooks/useHaptics';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, type ChannelId } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
 import { BottomNavigation } from './BottomNavigation';
@@ -52,6 +54,12 @@ function pageToStreamIndex(position: number): number {
   return 1; // Green (position === 2)
 }
 
+// Map stream index to channel ID for logo lookup
+function streamIndexToChannelId(index: number): ChannelId {
+  const channelIds: ChannelId[] = ['red', 'green', 'blue'];
+  return channelIds[index] ?? 'green';
+}
+
 export function SwipePager(): React.ReactElement {
   const pagerRef = useRef<PagerView>(null);
   const haptics = useHaptics();
@@ -63,6 +71,17 @@ export function SwipePager(): React.ReactElement {
   const isJumpingRef = useRef(false);
   // Track current page for navigation
   const currentPageRef = useRef(initialPage);
+  // Debounce stream switching to prevent rapid-fire switches during fast swiping
+  const pendingStreamSwitchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup pending timeout on unmount
+  useEffect(() => {
+    return (): void => {
+      if (pendingStreamSwitchRef.current !== null) {
+        clearTimeout(pendingStreamSwitchRef.current);
+      }
+    };
+  }, []);
 
   // Trigger haptic when swipe starts settling (before animation completes)
   const handlePageScrollStateChanged = useCallback(
@@ -82,6 +101,12 @@ export function SwipePager(): React.ReactElement {
       const position = event.nativeEvent.position;
       currentPageRef.current = position;
 
+      // Cancel any pending stream switch from rapid swiping
+      if (pendingStreamSwitchRef.current !== null) {
+        clearTimeout(pendingStreamSwitchRef.current);
+        pendingStreamSwitchRef.current = null;
+      }
+
       // If this is from a programmatic jump, skip stream switching logic
       if (isJumpingRef.current) {
         isJumpingRef.current = false;
@@ -92,57 +117,64 @@ export function SwipePager(): React.ReactElement {
       const streamIndex = pageToStreamIndex(position);
       setCurrentStreamIndex(streamIndex);
 
-      // Handle infinite scroll boundaries
+      // Handle infinite scroll boundaries (immediate jump, debounced stream switch)
       if (position === 0) {
         isJumpingRef.current = true;
         pagerRef.current?.setPageWithoutAnimation(3);
         currentPageRef.current = 3;
-        // Switch to the actual stream (Blue at page 3)
-        const stream = INFINITE_PAGES[3];
-        const currentStatus = useAudioStore.getState().status;
-        if ((currentStatus === 'playing' || currentStatus === 'loading') && stream !== undefined) {
-          void playStream(stream.url, stream.name);
-        }
+        // Debounce the stream switch to handle rapid boundary jumps
+        pendingStreamSwitchRef.current = setTimeout(() => {
+          const stream = INFINITE_PAGES[3];
+          const currentStatus = useAudioStore.getState().status;
+          if (
+            (currentStatus === 'playing' || currentStatus === 'loading') &&
+            stream !== undefined
+          ) {
+            void playStream(stream.url, stream.name);
+          }
+        }, 150);
         return;
       } else if (position === 4) {
         isJumpingRef.current = true;
         pagerRef.current?.setPageWithoutAnimation(1);
         currentPageRef.current = 1;
-        // Switch to the actual stream (Red at page 1)
-        const stream = INFINITE_PAGES[1];
-        const currentStatus = useAudioStore.getState().status;
-        if ((currentStatus === 'playing' || currentStatus === 'loading') && stream !== undefined) {
-          void playStream(stream.url, stream.name);
-        }
+        // Debounce the stream switch to handle rapid boundary jumps
+        pendingStreamSwitchRef.current = setTimeout(() => {
+          const stream = INFINITE_PAGES[1];
+          const currentStatus = useAudioStore.getState().status;
+          if (
+            (currentStatus === 'playing' || currentStatus === 'loading') &&
+            stream !== undefined
+          ) {
+            void playStream(stream.url, stream.name);
+          }
+        }, 150);
         return;
       }
 
-      // Get fresh status from store (not from closure)
-      const currentStatus = useAudioStore.getState().status;
-
-      // If music is playing or loading, switch to the new stream
-      const stream = INFINITE_PAGES[position];
-      if ((currentStatus === 'playing' || currentStatus === 'loading') && stream !== undefined) {
-        void playStream(stream.url, stream.name);
-      }
+      // Debounce the actual stream switch to prevent rapid-fire switches
+      pendingStreamSwitchRef.current = setTimeout(() => {
+        const currentStatus = useAudioStore.getState().status;
+        const stream = INFINITE_PAGES[position];
+        if ((currentStatus === 'playing' || currentStatus === 'loading') && stream !== undefined) {
+          void playStream(stream.url, stream.name);
+        }
+      }, 150);
     },
     [playStream, setCurrentStreamIndex]
   );
 
   const handlePrevious = useCallback((): void => {
-    // Map current stream index to page, then go to previous
-    // Stream indices: Red=0, Green=1, Blue=2
-    // Pages: Red=1, Green=2, Blue=3
-    const currentPage = currentStreamIndex + 1;
-    const prevPage = currentPage - 1;
-    pagerRef.current?.setPage(prevPage);
-  }, [currentStreamIndex]);
+    // Use currentPageRef for accurate page tracking (avoids stale closure)
+    const prevPage = currentPageRef.current - 1;
+    pagerRef.current?.setPage(Math.max(0, prevPage));
+  }, []);
 
   const handleNext = useCallback((): void => {
-    const currentPage = currentStreamIndex + 1;
-    const nextPage = currentPage + 1;
-    pagerRef.current?.setPage(nextPage);
-  }, [currentStreamIndex]);
+    // Use currentPageRef for accurate page tracking (avoids stale closure)
+    const nextPage = currentPageRef.current + 1;
+    pagerRef.current?.setPage(Math.min(INFINITE_PAGES.length - 1, nextPage));
+  }, []);
 
   return (
     <View className="flex-1">
@@ -161,6 +193,15 @@ export function SwipePager(): React.ReactElement {
           </View>
         ))}
       </PagerView>
+
+      {/* Fixed Logo Overlay - stays centered while pages swipe */}
+      <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
+        <Image
+          source={CHANNEL_LOGOS[streamIndexToChannelId(currentStreamIndex)]}
+          style={{ width: 192, height: 192 }}
+          contentFit="contain"
+        />
+      </View>
 
       {/* Fixed Status Badge */}
       {/* <StatusBadge /> */}

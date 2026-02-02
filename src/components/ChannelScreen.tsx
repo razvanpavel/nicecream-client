@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CHANNEL_LOGOS } from '@/config/logos';
@@ -32,13 +32,14 @@ export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElemen
           paddingBottom: insets.bottom + 100, // Extra space for bottom navigation
         }}
       >
-        {/* Stream Logo */}
-        {/* Note: expo-image requires explicit style dimensions on native */}
-        <Image
-          source={CHANNEL_LOGOS[channelId]}
-          style={{ width: 192, height: 192 }}
-          contentFit="contain"
-        />
+        {/* Stream Logo - only on web (native has fixed logo overlay in SwipePager) */}
+        {Platform.OS === 'web' && (
+          <Image
+            source={CHANNEL_LOGOS[channelId]}
+            style={{ width: 192, height: 192 }}
+            contentFit="contain"
+          />
+        )}
 
         {/* Station Name - Large heading, lowercase */}
         {/* <Text className="text-center font-heading text-10xl lowercase text-white md:text-12xl lg:text-16xl">

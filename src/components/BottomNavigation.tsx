@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { STREAMS } from '@/config/streams';
+import { useHaptics } from '@/hooks/useHaptics';
 import { isExpoGo } from '@/services/audioService';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
@@ -22,6 +23,7 @@ export function BottomNavigation({
   onNext,
 }: BottomNavigationProps): React.ReactElement {
   const insets = useSafeAreaInsets();
+  const haptics = useHaptics();
   const { status, currentStreamUrl, streamMetadata, togglePlayback, playStream } = useAudioStore();
   const isPlayerSetup = useAppStore((state) => state.isPlayerSetup);
   const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
@@ -54,6 +56,7 @@ export function BottomNavigation({
 
   const handlePlayPause = (): void => {
     if (currentStream === undefined) return;
+    void haptics.medium();
 
     if (isCurrentStreamActive) {
       void togglePlayback();
@@ -63,17 +66,25 @@ export function BottomNavigation({
   };
 
   const handlePrevious = (): void => {
+    void haptics.light();
     onPrevious?.();
   };
 
   const handleNext = (): void => {
+    void haptics.light();
     onNext?.();
   };
 
   const handleHeartPress = (): void => {
     if (hasTrackInfo) {
+      void haptics.light();
       setShowFavoriteSheet(true);
     }
+  };
+
+  const handleMenuPress = (): void => {
+    void haptics.light();
+    // Menu functionality to be implemented
   };
 
   const handleMusicSearch = useCallback(
@@ -118,8 +129,8 @@ export function BottomNavigation({
       style={{ paddingBottom: insets.bottom + 16 }}
       pointerEvents="box-none"
     >
-      {/* Track Info */}
-      {showTrackInfo && (
+      {/* Track Info or Stream Name */}
+      {showTrackInfo ? (
         <View className="mb-8 items-center px-8">
           {streamMetadata.title != null && streamMetadata.title !== '-' && (
             <Text
@@ -137,6 +148,12 @@ export function BottomNavigation({
               {streamMetadata.artist}
             </Text>
           )}
+        </View>
+      ) : (
+        <View className="mb-8 items-center px-8">
+          <Text className="text-center font-heading text-2xl font-bold lowercase text-white">
+            {currentStream?.name ?? ''}
+          </Text>
         </View>
       )}
 
@@ -184,8 +201,7 @@ export function BottomNavigation({
 
         {/* Menu Button */}
         <Pressable
-          // eslint-disable-next-line @typescript-eslint/no-empty-function
-          onPress={(): void => {}}
+          onPress={handleMenuPress}
           className="h-16 w-16 items-center justify-center active:opacity-70"
         >
           <MenuIcon size={56} color="white" />
