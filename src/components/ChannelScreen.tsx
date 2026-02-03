@@ -1,6 +1,5 @@
 import { Image } from 'expo-image';
 import { Platform, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CHANNEL_LOGOS } from '@/config/logos';
 import type { StreamConfig } from '@/config/streams';
@@ -13,7 +12,6 @@ interface ChannelScreenProps {
 }
 
 export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElement {
-  const insets = useSafeAreaInsets();
   const channelId = stream.id as ChannelId;
 
   return (
@@ -24,28 +22,16 @@ export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElemen
       {/* Subtle overlay for text legibility */}
       <View className="absolute inset-0 bg-black/5" pointerEvents="none" />
 
-      {/* Content Layer */}
-      <View
-        className="flex-1 items-center justify-center"
-        style={{
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom + 100, // Extra space for bottom navigation
-        }}
-      >
-        {/* Stream Logo - only on web (native has fixed logo overlay in SwipePager) */}
-        {Platform.OS === 'web' && (
+      {/* Stream Logo - true screen center (web only, native uses SwipePager overlay) */}
+      {Platform.OS === 'web' && (
+        <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
           <Image
             source={CHANNEL_LOGOS[channelId]}
-            style={{ width: 320, height: 320 }}
+            className="aspect-square w-4/5 max-w-80"
             contentFit="contain"
           />
-        )}
-
-        {/* Station Name - Large heading, lowercase */}
-        {/* <Text className="text-center font-heading text-10xl lowercase text-white md:text-12xl lg:text-16xl">
-          {stream.name}
-        </Text> */}
-      </View>
+        </View>
+      )}
     </View>
   );
 }

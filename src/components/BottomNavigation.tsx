@@ -28,6 +28,7 @@ export function BottomNavigation({
   const { status, currentStreamUrl, streamMetadata, togglePlayback, playStream } = useAudioStore();
   const isPlayerSetup = useAppStore((state) => state.isPlayerSetup);
   const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
+  const isOffline = useAppStore((state) => state.isOffline);
 
   const [showFavoriteSheet, setShowFavoriteSheet] = useState(false);
 
@@ -102,15 +103,9 @@ export function BottomNavigation({
 
   const favoriteOptions: ActionSheetOption[] = [
     {
-      label: 'Spotify',
+      label: 'SoundCloud',
       onPress: (): void => {
-        handleMusicSearch('spotify');
-      },
-    },
-    {
-      label: 'YouTube Music',
-      onPress: (): void => {
-        handleMusicSearch('youtube');
+        handleMusicSearch('soundcloud');
       },
     },
     {
@@ -120,9 +115,15 @@ export function BottomNavigation({
       },
     },
     {
-      label: 'SoundCloud',
+      label: 'YouTube Music',
       onPress: (): void => {
-        handleMusicSearch('soundcloud');
+        handleMusicSearch('youtube');
+      },
+    },
+    {
+      label: 'Spotify',
+      onPress: (): void => {
+        handleMusicSearch('spotify');
       },
     },
   ];
@@ -186,8 +187,8 @@ export function BottomNavigation({
         {/* Play/Pause Button */}
         <Pressable
           onPress={handlePlayPause}
-          disabled={isLoading}
-          className="h-16 w-16 items-center justify-center active:opacity-70"
+          disabled={isLoading || isOffline}
+          className={`h-16 w-16 items-center justify-center active:opacity-70 ${isOffline ? 'opacity-40' : ''}`}
         >
           {isLoading ? (
             <Loader size={100} />
