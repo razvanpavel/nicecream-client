@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { STREAMS } from '@/config/streams';
@@ -11,6 +11,7 @@ import { openMusicSearch, type MusicService } from '@/utils/musicSearch';
 
 import { ActionSheet, type ActionSheetOption } from './ActionSheet';
 import { HeartIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons';
+import { Loader } from './Loader';
 import { Text } from './ui';
 
 interface BottomNavigationProps {
@@ -183,7 +184,7 @@ export function BottomNavigation({
           className="h-16 w-16 items-center justify-center active:opacity-70"
         >
           {isLoading ? (
-            <ActivityIndicator size="large" color="white" />
+            <Loader size={100} />
           ) : isPlaying ? (
             <PauseIcon size={64} color="white" />
           ) : (

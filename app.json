@@ -70,7 +70,12 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      ["expo-router", { "origin": "https://nicecream.fm" }],
+      [
+        "expo-router",
+        {
+          "origin": "https://nicecream.fm"
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -94,7 +99,8 @@
             }
           }
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

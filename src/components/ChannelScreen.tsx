@@ -36,7 +36,7 @@ export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElemen
         {Platform.OS === 'web' && (
           <Image
             source={CHANNEL_LOGOS[channelId]}
-            style={{ width: 192, height: 192 }}
+            style={{ width: 320, height: 320 }}
             contentFit="contain"
           />
         )}

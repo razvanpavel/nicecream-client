@@ -168,7 +168,7 @@ export function SwipePager(): React.ReactElement {
       <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
         <Image
           source={CHANNEL_LOGOS[streamIndexToChannelId(currentStreamIndex)]}
-          style={{ width: 192, height: 192 }}
+          style={{ width: 268, height: 268 }}
           contentFit="contain"
         />
       </View>
