@@ -300,7 +300,7 @@ async function initRealPlaybackService(): Promise<void> {
   eventSubscriptions.push(
     TP.addEventListener(Event.MetadataCommonReceived, (event) => {
       // Skip metadata updates during stream transitions to prevent flash of old content
-      const { isTransitioning } = useAudioStore.getState();
+      const { isTransitioning, currentStreamName } = useAudioStore.getState();
       if (isTransitioning) {
         return;
       }
@@ -316,6 +316,27 @@ async function initRealPlaybackService(): Promise<void> {
 
       if (Object.keys(streamMetadata).length > 0) {
         useAudioStore.setState({ streamMetadata });
+
+        // Update lock screen metadata with channel name prefix
+        if (currentStreamName !== null) {
+          const channelName =
+            currentStreamName.charAt(0).toUpperCase() + currentStreamName.slice(1);
+          const trackTitle = streamMetadata.title ?? '';
+          const trackArtist = streamMetadata.artist ?? '';
+
+          // Format: "Green: track artist - track name" or just "Green: track name" if no artist
+          const lockScreenTitle =
+            trackArtist !== '' && trackArtist !== '-'
+              ? `${channelName}: ${trackArtist} - ${trackTitle}`
+              : `${channelName}: ${trackTitle}`;
+
+          TP.updateNowPlayingMetadata({
+            title: lockScreenTitle,
+            artist: 'Nicecream.fm',
+          }).catch((e: unknown) => {
+            console.error('[PlaybackService] Failed to update now playing metadata:', e);
+          });
+        }
       }
     })
   );

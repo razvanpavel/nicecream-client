@@ -1,6 +1,6 @@
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { AppState, type AppStateStatus, Platform, StyleSheet, View } from 'react-native';
 
 import { CHANNEL_BACKGROUNDS } from '@/config/backgrounds';
 import type { ChannelId } from '@/store/appStore';
@@ -15,8 +15,32 @@ export function BackgroundImage({ channel }: BackgroundImageProps): React.ReactE
     player.muted = true;
   });
 
+  const wasPlayingRef = useRef<boolean>(false);
+
   useEffect(() => {
     player.play();
+
+    // Only add AppState listener on native platforms
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    const handleAppStateChange = (nextAppState: AppStateStatus): void => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        wasPlayingRef.current = player.playing;
+        player.pause();
+      } else if (nextAppState === 'active') {
+        if (wasPlayingRef.current) {
+          player.play();
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return (): void => {
+      subscription.remove();
+    };
   }, [player]);
 
   return (
