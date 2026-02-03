@@ -20,11 +20,27 @@ export function BackgroundImage({ channel }: BackgroundImageProps): React.ReactE
   useEffect(() => {
     player.play();
 
-    // Only add AppState listener on native platforms
     if (Platform.OS === 'web') {
-      return;
+      // Web: use document visibility API
+      const handleVisibilityChange = (): void => {
+        if (document.hidden) {
+          wasPlayingRef.current = player.playing;
+          player.pause();
+        } else {
+          if (wasPlayingRef.current) {
+            player.play();
+          }
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return (): void => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     }
 
+    // Native: use AppState
     const handleAppStateChange = (nextAppState: AppStateStatus): void => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         wasPlayingRef.current = player.playing;
