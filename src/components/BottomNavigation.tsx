@@ -119,6 +119,12 @@ export function BottomNavigation({
         handleMusicSearch('apple');
       },
     },
+    {
+      label: 'SoundCloud',
+      onPress: (): void => {
+        handleMusicSearch('soundcloud');
+      },
+    },
   ];
 
   // Show track info only when playing and metadata is available

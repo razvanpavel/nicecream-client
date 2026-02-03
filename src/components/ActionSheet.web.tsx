@@ -1,10 +1,12 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 
 import { cn } from '@/utils/cn';
 
 import type { ActionSheetProps } from './ActionSheet';
 import { Text } from './ui';
+
+const ANIMATION_DURATION = 300;
 
 export function ActionSheet({
   visible,
@@ -13,14 +15,46 @@ export function ActionSheet({
   options,
   cancelLabel = 'cancel',
 }: ActionSheetProps): React.ReactElement | null {
+  const [isShowing, setIsShowing] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  // Handle open animation
+  useEffect(() => {
+    if (visible) {
+      // Small delay to ensure the modal is mounted before animating
+      const timer = setTimeout(() => {
+        setIsShowing(true);
+      }, 10);
+      return (): void => {
+        clearTimeout(timer);
+      };
+    } else {
+      setIsShowing(false);
+    }
+    return undefined;
+  }, [visible]);
+
+  // Handle close with animation
+  const handleClose = useCallback((): void => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    setIsShowing(false);
+
+    // Wait for animation to complete before calling onClose
+    setTimeout(() => {
+      setIsAnimating(false);
+      onClose();
+    }, ANIMATION_DURATION);
+  }, [onClose, isAnimating]);
+
   // Handle escape key to close
   const handleKeyDown = useCallback(
     (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        onClose();
+        handleClose();
       }
     },
-    [onClose]
+    [handleClose]
   );
 
   useEffect(() => {
@@ -35,7 +69,7 @@ export function ActionSheet({
 
   const handleOptionPress = (option: ActionSheetProps['options'][number]): void => {
     option.onPress();
-    onClose();
+    handleClose();
   };
 
   if (!visible) {
@@ -43,15 +77,21 @@ export function ActionSheet({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
       {/* Backdrop */}
       <Pressable
-        className="absolute inset-0 items-center justify-end bg-black/60"
-        onPress={onClose}
+        className={cn(
+          'absolute inset-0 items-center justify-end',
+          'transition-colors',
+          isShowing ? 'bg-black/60' : 'bg-transparent'
+        )}
+        style={{ transitionDuration: `${String(ANIMATION_DURATION)}ms` }}
+        onPress={handleClose}
       >
         {/* Sheet container - stop propagation so clicking sheet doesn't close */}
         <Pressable
-          className="w-full max-w-md"
+          className={cn('w-full max-w-md transition-transform', isShowing ? '' : 'translate-y-full')}
+          style={{ transitionDuration: `${String(ANIMATION_DURATION)}ms` }}
           onPress={(e) => {
             e.stopPropagation();
           }}
@@ -95,7 +135,7 @@ export function ActionSheet({
           {/* Cancel button */}
           <View className="mx-4 mb-4">
             <Pressable
-              onPress={onClose}
+              onPress={handleClose}
               className="cursor-pointer rounded-2xl bg-neutral-800 py-4 hover:bg-neutral-700 active:bg-neutral-600"
             >
               <Text className="text-center text-lg font-medium text-white">{cancelLabel}</Text>

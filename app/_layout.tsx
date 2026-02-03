@@ -103,8 +103,6 @@ export default function RootLayout(): React.ReactElement | null {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="[channel]" />
           <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         </Stack>
         <StatusBar style="auto" />

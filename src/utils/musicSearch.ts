@@ -1,7 +1,7 @@
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 
-export type MusicService = 'spotify' | 'apple' | 'youtube';
+export type MusicService = 'spotify' | 'apple' | 'youtube' | 'soundcloud';
 
 /**
  * Generate a Spotify search URL for the given query
@@ -33,6 +33,15 @@ export function getAppleMusicSearchUrls(query: string): { native: string; web: s
 export function getYouTubeMusicSearchUrl(query: string): string {
   const encoded = encodeURIComponent(query);
   return `https://music.youtube.com/search?q=${encoded}`;
+}
+
+/**
+ * Generate a SoundCloud search URL for the given query
+ * Uses Universal Links format - opens in app if installed, otherwise browser
+ */
+export function getSoundCloudSearchUrl(query: string): string {
+  const encoded = encodeURIComponent(query);
+  return `https://soundcloud.com/search?q=${encoded}`;
 }
 
 /**
@@ -90,6 +99,9 @@ export async function openMusicSearch(
         case 'youtube':
           url = getYouTubeMusicSearchUrl(query);
           break;
+        case 'soundcloud':
+          url = getSoundCloudSearchUrl(query);
+          break;
       }
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
@@ -119,6 +131,13 @@ export async function openMusicSearch(
       case 'youtube': {
         const url = getYouTubeMusicSearchUrl(query);
         console.log(`[musicSearch] Opening YouTube Music: ${url}`);
+        await Linking.openURL(url);
+        break;
+      }
+
+      case 'soundcloud': {
+        const url = getSoundCloudSearchUrl(query);
+        console.log(`[musicSearch] Opening SoundCloud: ${url}`);
         await Linking.openURL(url);
         break;
       }
