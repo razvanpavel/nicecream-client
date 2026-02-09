@@ -10,7 +10,10 @@ import { LogBox, Platform } from 'react-native';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { Asset } from 'expo-asset';
+
 import { queryClient } from '@/api/queryClient';
+import { CHANNEL_BACKGROUNDS } from '@/config/backgrounds';
 import { useAudioLifecycle } from '@/hooks/useAudioLifecycle';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { destroyAudioService, getAudioService, isExpoGo } from '@/services/audioService';
@@ -89,6 +92,23 @@ export default function RootLayout(): React.ReactElement | null {
       destroyAudioService();
     };
   }, [setPlayerSetup, setTrackPlayerAvailable]);
+
+  // Preload background videos on web so channel switches are instant
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const sources = Object.values(CHANNEL_BACKGROUNDS);
+    for (const source of sources) {
+      if (typeof source === 'number') {
+        const asset = Asset.fromModule(source);
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'video';
+        link.href = asset.uri;
+        document.head.appendChild(link);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded) {

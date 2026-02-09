@@ -6,7 +6,7 @@ import { cn } from '@/utils/cn';
 import type { ActionSheetProps } from './ActionSheet';
 import { Text } from './ui';
 
-const ANIMATION_DURATION = 300;
+const ANIMATION_DURATION = 200;
 
 export function ActionSheet({
   visible,

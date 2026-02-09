@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 
 import { getNowPlayingForStream } from '@/api/nowPlaying';
 import { useAudioStore } from '@/store/audioStore';
@@ -57,10 +58,12 @@ export function useNowPlaying(): void {
       const metadataKey = `${songInfo.artist}|${songInfo.title}`;
 
       // ENH-8: Check if ICY metadata arrived recently — if so, skip HTTP update
-      const timeSinceIcy = Date.now() - lastIcyUpdateRef.current;
-      if (timeSinceIcy < ICY_PRIORITY_WINDOW_MS) {
-        // ICY data is fresher, skip this HTTP update
-        return;
+      // Only applies on native where ICY metadata is available via TrackPlayer
+      if (Platform.OS !== 'web') {
+        const timeSinceIcy = Date.now() - lastIcyUpdateRef.current;
+        if (timeSinceIcy < ICY_PRIORITY_WINDOW_MS) {
+          return;
+        }
       }
 
       // ENH-6: Track unchanged responses for adaptive polling
@@ -124,8 +127,12 @@ export function useNowPlaying(): void {
     };
   }, [status, currentStreamUrl, isNicecreamStream, fetchAndUpdateMetadata]);
 
-  // ENH-8: Track ICY metadata updates to implement source priority
+  // ENH-8: Track ICY metadata updates to implement source priority (native only)
+  // On web there's no ICY metadata, so this subscription would incorrectly
+  // treat HTTP poll updates as ICY and block subsequent polls
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+
     return useAudioStore.subscribe((state, prevState) => {
       // Detect ICY-originated metadata updates (from playbackService MetadataCommonReceived)
       if (state.streamMetadata !== prevState.streamMetadata && state.streamMetadata !== null) {
