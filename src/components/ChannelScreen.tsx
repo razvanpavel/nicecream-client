@@ -9,16 +9,15 @@ import { BackgroundImage } from './BackgroundImage';
 
 interface ChannelScreenProps {
   stream: StreamConfig;
-  isActive?: boolean;
 }
 
-export function ChannelScreen({ stream, isActive }: ChannelScreenProps): React.ReactElement {
+export function ChannelScreen({ stream }: ChannelScreenProps): React.ReactElement {
   const channelId = stream.id as ChannelId;
 
   return (
     <View className="flex-1" style={{ backgroundColor: stream.color }}>
       {/* Background Image Layer */}
-      <BackgroundImage channel={channelId} isActive={isActive} />
+      <BackgroundImage channel={channelId} />
 
       {/* Subtle overlay for text legibility */}
       <View className="absolute inset-0 bg-black/5" pointerEvents="none" />

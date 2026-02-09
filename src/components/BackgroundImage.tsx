@@ -7,7 +7,6 @@ import type { ChannelId } from '@/store/appStore';
 
 interface BackgroundImageProps {
   channel: ChannelId;
-  isActive?: boolean | undefined;
 }
 
 const ERROR_RECOVERY_COOLDOWN_MS = 2000;
@@ -23,26 +22,19 @@ function ensurePlaying(player: ReturnType<typeof useVideoPlayer>, channel: Chann
   player.play();
 }
 
-export function BackgroundImage({ channel, isActive }: BackgroundImageProps): React.ReactElement {
+export function BackgroundImage({ channel }: BackgroundImageProps): React.ReactElement {
   const player = useVideoPlayer(CHANNEL_BACKGROUNDS[channel], (player) => {
     player.loop = true;
     player.muted = true;
   });
 
-  // undefined (web, not passed) or true → video should play
-  const effectiveActive = isActive !== false;
-
-  // Track app foreground state so off-screen videos stay paused on foreground
+  // Track app foreground state so videos pause when backgrounded
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   // Cooldown for error recovery to prevent infinite retry loops
   const lastRecoveryRef = useRef(0);
 
   useEffect(() => {
-    if (effectiveActive) {
-      player.play();
-    } else {
-      player.pause();
-    }
+    player.play();
 
     if (Platform.OS === 'web') {
       // Web: use document visibility API
@@ -67,7 +59,7 @@ export function BackgroundImage({ channel, isActive }: BackgroundImageProps): Re
 
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         player.pause();
-      } else if (nextAppState === 'active' && effectiveActive) {
+      } else if (nextAppState === 'active') {
         ensurePlaying(player, channel);
       }
     };
@@ -77,7 +69,7 @@ export function BackgroundImage({ channel, isActive }: BackgroundImageProps): Re
     return (): void => {
       subscription.remove();
     };
-  }, [player, channel, effectiveActive]);
+  }, [player, channel]);
 
   // Error recovery: listen for statusChange events on native
   useEffect(() => {
@@ -92,7 +84,7 @@ export function BackgroundImage({ channel, isActive }: BackgroundImageProps): Re
       if (now - lastRecoveryRef.current < ERROR_RECOVERY_COOLDOWN_MS) return;
       lastRecoveryRef.current = now;
 
-      if (effectiveActive && appStateRef.current === 'active') {
+      if (appStateRef.current === 'active') {
         ensurePlaying(player, channel);
       }
     });
@@ -100,7 +92,7 @@ export function BackgroundImage({ channel, isActive }: BackgroundImageProps): Re
     return (): void => {
       statusSubscription.remove();
     };
-  }, [player, channel, effectiveActive]);
+  }, [player, channel]);
 
   return (
     <View style={styles.container} pointerEvents="none">
@@ -109,7 +101,7 @@ export function BackgroundImage({ channel, isActive }: BackgroundImageProps): Re
         style={styles.video}
         contentFit="cover"
         nativeControls={false}
-        allowsFullscreen={false}
+        allowsVideoFrameAnalysis={false}
         allowsPictureInPicture={false}
       />
     </View>

@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import { View } from 'react-native';
 import PagerView, {
   type PagerViewOnPageSelectedEvent,
@@ -71,8 +71,6 @@ export function SwipePager(): React.ReactElement {
   const isJumpingRef = useRef(false);
   // Track current page for navigation
   const currentPageRef = useRef(initialPage);
-  // Track active page as state so off-screen videos can be paused
-  const [activePage, setActivePage] = useState(initialPage);
 
   // Trigger haptic when swipe starts settling (before animation completes)
   const handlePageScrollStateChanged = useCallback(
@@ -126,9 +124,6 @@ export function SwipePager(): React.ReactElement {
         void playStream(stream.url, stream.name);
       }
 
-      // Update active page state for video pause/resume
-      setActivePage(effectivePosition);
-
       // Perform the visual jump AFTER initiating stream switch
       if (needsJump) {
         isJumpingRef.current = true;
@@ -164,7 +159,7 @@ export function SwipePager(): React.ReactElement {
       >
         {INFINITE_PAGES.map((stream, index) => (
           <View key={`${stream.id}-${String(index)}`} className="flex-1">
-            <ChannelScreen stream={stream} isActive={index === activePage} />
+            <ChannelScreen stream={stream} />
           </View>
         ))}
       </PagerView>
