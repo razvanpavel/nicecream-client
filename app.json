@@ -2,7 +2,7 @@
   "expo": {
     "name": "Nicecream.fm",
     "slug": "nicecream-fm",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "nicecream",
@@ -110,6 +110,12 @@
       "eas": {
         "projectId": "6a144976-a293-4158-9693-9be5e86e8f51"
       }
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6a144976-a293-4158-9693-9be5e86e8f51"
     },
     "owner": "sfpavel"
   }
