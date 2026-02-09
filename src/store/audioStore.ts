@@ -585,14 +585,19 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       return;
     }
 
+    // REL-1 fix: Set isTransitioning to suppress intermediate state events
+    set({ isTransitioning: true });
+
     try {
       const audioService = await getAudioService();
       const nowPlaying = await audioService.togglePlayback();
-      set({ status: nowPlaying ? 'playing' : 'paused' });
+      recordCircuitSuccess();
+      set({ status: nowPlaying ? 'playing' : 'paused', isTransitioning: false });
     } catch (error) {
       const categorized = categorizeError(error);
       console.error('Failed to toggle playback:', error);
-      set({ status: 'error', error: categorized });
+      recordCircuitFailure();
+      set({ status: 'error', error: categorized, isTransitioning: false });
     }
   },
 
@@ -651,10 +656,12 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     try {
       const audioService = await getAudioService();
       await audioService.seekToLive();
+      recordCircuitSuccess();
       set({ status: 'playing' });
     } catch (error) {
       const categorized = categorizeError(error);
       console.error('Failed to seek to live:', error);
+      recordCircuitFailure();
       set({ status: 'error', error: categorized });
     }
   },

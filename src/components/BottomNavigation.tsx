@@ -25,7 +25,11 @@ export function BottomNavigation({
 }: BottomNavigationProps): React.ReactElement {
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
-  const { status, currentStreamUrl, streamMetadata, togglePlayback, playStream } = useAudioStore();
+  const status = useAudioStore((s) => s.status);
+  const currentStreamUrl = useAudioStore((s) => s.currentStreamUrl);
+  const streamMetadata = useAudioStore((s) => s.streamMetadata);
+  const togglePlayback = useAudioStore((s) => s.togglePlayback);
+  const playStream = useAudioStore((s) => s.playStream);
   const isPlayerSetup = useAppStore((state) => state.isPlayerSetup);
   const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
   const isOffline = useAppStore((state) => state.isOffline);

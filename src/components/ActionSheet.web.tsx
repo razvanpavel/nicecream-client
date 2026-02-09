@@ -90,7 +90,10 @@ export function ActionSheet({
       >
         {/* Sheet container - stop propagation so clicking sheet doesn't close */}
         <Pressable
-          className={cn('w-full max-w-md transition-transform', isShowing ? '' : 'translate-y-full')}
+          className={cn(
+            'w-full max-w-md transition-transform',
+            isShowing ? '' : 'translate-y-full'
+          )}
           style={{ transitionDuration: `${String(ANIMATION_DURATION)}ms` }}
           onPress={(e) => {
             e.stopPropagation();

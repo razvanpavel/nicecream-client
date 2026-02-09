@@ -74,21 +74,48 @@ export function findMatchingStation(
 
 /**
  * Fetch now playing data from the AzuraCast API
+ * REL-5: Accepts AbortSignal to cancel in-flight requests
  */
-export async function fetchNowPlaying(): Promise<NowPlayingStation[]> {
-  const response = await axios.get<NowPlayingStation[]>(NOW_PLAYING_URL, {
-    timeout: 5000,
-  });
+export async function fetchNowPlaying(signal?: AbortSignal): Promise<NowPlayingStation[]> {
+  const config: { timeout: number; signal?: AbortSignal } = { timeout: 5000 };
+  if (signal !== undefined) {
+    config.signal = signal;
+  }
+  const response = await axios.get<NowPlayingStation[]>(NOW_PLAYING_URL, config);
   return response.data;
 }
 
 /**
- * Get the current song info for a specific stream URL
+ * Validate the shape of the API response before using it
+ * ENH-7: Runtime validation to prevent silent breakage from API changes
  */
-export async function getNowPlayingForStream(streamUrl: string): Promise<ParsedSongInfo | null> {
+function isValidStation(station: unknown): station is NowPlayingStation {
+  if (station == null || typeof station !== 'object') return false;
+  const s = station as Record<string, unknown>;
+  if (s.station == null || typeof s.station !== 'object') return false;
+  if (s.now_playing == null || typeof s.now_playing !== 'object') return false;
+  const stationObj = s.station as Record<string, unknown>;
+  const nowPlaying = s.now_playing as Record<string, unknown>;
+  if (typeof stationObj.listen_url !== 'string') return false;
+  if (nowPlaying.song == null || typeof nowPlaying.song !== 'object') return false;
+  const song = nowPlaying.song as Record<string, unknown>;
+  return typeof song.title === 'string';
+}
+
+/**
+ * Get the current song info for a specific stream URL
+ * REL-5: Accepts AbortSignal to cancel in-flight requests
+ */
+export async function getNowPlayingForStream(
+  streamUrl: string,
+  signal?: AbortSignal
+): Promise<ParsedSongInfo | null> {
   try {
-    const stations = await fetchNowPlaying();
-    const matchingStation = findMatchingStation(stations, streamUrl);
+    const stations = await fetchNowPlaying(signal);
+
+    // ENH-7: Validate response shape
+    const validStations = stations.filter(isValidStation);
+    const matchingStation = findMatchingStation(validStations, streamUrl);
 
     if (matchingStation == null) {
       return null;
@@ -96,6 +123,8 @@ export async function getNowPlayingForStream(streamUrl: string): Promise<ParsedS
 
     return parseSongTitle(matchingStation.now_playing.song.title);
   } catch (error) {
+    // Don't log cancelled requests as errors
+    if (axios.isCancel(error)) return null;
     console.error('Failed to fetch now playing data:', error);
     return null;
   }

@@ -1,5 +1,7 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
+import { env } from '@/config/env';
+
 // Check if running in Expo Go - must be checked BEFORE any native module imports
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
@@ -75,23 +77,51 @@ const createRealAudioService = async (): Promise<AudioService> => {
   let lastStreamUrl: string | null = null;
   let lastStreamTitle: string | null = null;
 
-  // Helper: Wait for a specific state with timeout
-  const waitForState = async (
+  const { Event } = TrackPlayer;
+
+  // PERF-4: Event-driven waitForState instead of 100ms polling
+  const waitForState = (
     targetState: (typeof State)[keyof typeof State],
     timeoutMs: number
   ): Promise<boolean> => {
-    const startTime = Date.now();
-    while (Date.now() - startTime < timeoutMs) {
-      const state = await TP.getPlaybackState();
-      if (state.state === targetState) {
-        return true;
-      }
-      if (state.state === State.Error) {
-        return false;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    return false;
+    return new Promise((resolve) => {
+      // Check current state first
+      void TP.getPlaybackState().then((currentState) => {
+        if (currentState.state === targetState) {
+          resolve(true);
+          return;
+        }
+        if (currentState.state === State.Error) {
+          resolve(false);
+          return;
+        }
+
+        let settled = false;
+
+        const subscription = TP.addEventListener(Event.PlaybackState, (event) => {
+          if (settled) return;
+          if (event.state === targetState) {
+            settled = true;
+            subscription.remove();
+            clearTimeout(timer);
+            resolve(true);
+          } else if (event.state === State.Error) {
+            settled = true;
+            subscription.remove();
+            clearTimeout(timer);
+            resolve(false);
+          }
+        });
+
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            subscription.remove();
+            resolve(false);
+          }
+        }, timeoutMs);
+      });
+    });
   };
 
   // Extract setup logic so it can be called from play()
@@ -217,14 +247,26 @@ const createRealAudioService = async (): Promise<AudioService> => {
           },
 
           // Media controls shown on lock screen and notification
-          // We only show Play/Pause/Stop since live streams don't support seek
-          capabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+          // ENH-4: Added SkipToNext/SkipToPrevious for channel switching
+          capabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.Stop,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+          ],
 
           // Compact notification on Android (limited space)
           compactCapabilities: [Capability.Play, Capability.Pause],
 
           // Full notification capabilities
-          notificationCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+          notificationCapabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.Stop,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+          ],
 
           // Progress bar update interval (0 = disabled for live streams)
           // Live streams don't have meaningful progress to display
@@ -290,8 +332,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
         id: 'live-stream',
         url,
         title,
-        artist: 'Nicecream.fm',
-        artwork: 'https://nicecream.fm/icon.png',
+        artist: env.appName,
+        artwork: env.artworkUrl,
         isLiveStream: true,
       };
 
@@ -382,6 +424,17 @@ const createRealAudioService = async (): Promise<AudioService> => {
           console.log(
             `[AudioService] ${elapsed()} Playback confirmed (retries: ${String(playRetries)})`
           );
+
+          // Set initial lock screen metadata immediately so the notification
+          // appears right away instead of waiting for MetadataCommonReceived
+          const channelName = title.charAt(0).toUpperCase() + title.slice(1);
+          await TP.updateNowPlayingMetadata({
+            title: channelName,
+            artist: env.appName,
+            artwork: env.artworkUrl,
+          });
+          console.log(`[AudioService] ${elapsed()} Initial lock screen metadata set`);
+
           return;
         }
 
@@ -496,7 +549,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
       }
     },
 
-    // New: Verify playback is actually happening (for foreground check)
+    // Verify playback is actually happening (for foreground check and health checks)
+    // Uses a 2-second sampling window to reduce false positives from ICY streams
     verifyPlayback: async (): Promise<boolean> => {
       try {
         const state = await TP.getPlaybackState();
@@ -508,8 +562,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
         }
 
         // For live streams, check if we're receiving data by checking buffered position
-        // Wait a short time and check if position/buffer has changed
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Use a 2-second window to reduce false positives from ICY streams
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         const position2 = await TP.getProgress();
 
         // For live streams, buffered position should be increasing
@@ -523,54 +577,28 @@ const createRealAudioService = async (): Promise<AudioService> => {
             'pos1=',
             position1.position,
             'pos2=',
-            position2.position
+            position2.position,
+            'buf1=',
+            position1.buffered,
+            'buf2=',
+            position2.buffered
           );
         }
 
-        // At this point we're in Playing state. Even if positions haven't changed,
-        // consider playback valid for live streams that may not report progress.
-        return true;
+        return isProgressing;
       } catch (error) {
         console.error('[AudioService] verifyPlayback error:', error);
         return false;
       }
     },
 
-    // New: Reconnect to the last known stream
-    reconnectStream: async (): Promise<void> => {
-      if (lastStreamUrl === null || lastStreamTitle === null) {
-        console.log('[AudioService] No stream to reconnect to');
-        return;
-      }
-
-      console.log('[AudioService] Reconnecting to stream:', lastStreamTitle);
-
-      // Get the audioStore to trigger a proper playStream
-      // This is a simplified reconnect - the full implementation goes through audioStore
-      const track = {
-        id: 'live-stream',
-        url: lastStreamUrl,
-        title: lastStreamTitle,
-        artist: 'Nicecream.fm',
-        artwork: 'https://nicecream.fm/icon.png',
-        isLiveStream: true,
-      };
-
-      try {
-        await TP.load(track);
-        await TP.play();
-
-        // Verify playback started
-        const confirmed = await waitForState(State.Playing, 5000);
-        if (!confirmed) {
-          throw new Error('Reconnect failed - playback not confirmed');
-        }
-
-        console.log('[AudioService] Reconnect successful');
-      } catch (error) {
-        console.error('[AudioService] Reconnect failed:', error);
-        throw error;
-      }
+    // Reconnect is now handled through the store's playStream() for proper retry/circuit breaker.
+    // This method is kept as a no-op for interface compatibility.
+    reconnectStream: (): Promise<void> => {
+      console.log(
+        '[AudioService] reconnectStream() is deprecated — use store.playStream() instead'
+      );
+      return Promise.resolve();
     },
 
     // Seek to live edge for live streams
@@ -587,8 +615,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
         id: 'live-stream',
         url: lastStreamUrl,
         title: lastStreamTitle,
-        artist: 'Nicecream.fm',
-        artwork: 'https://nicecream.fm/icon.png',
+        artist: env.appName,
+        artwork: env.artworkUrl,
         isLiveStream: true,
       };
 
@@ -622,10 +650,18 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
 // Export a function that returns the appropriate service
 let audioServiceInstance: AudioService | null = null;
+// BUG-5 fix: Deduplicate creation promise to prevent two concurrent callers
+// from both creating a real audio service
+let audioServicePromise: Promise<AudioService> | null = null;
 
 export async function getAudioService(): Promise<AudioService> {
   if (audioServiceInstance !== null) {
     return audioServiceInstance;
+  }
+
+  // Return existing creation promise if one is in flight
+  if (audioServicePromise !== null) {
+    return audioServicePromise;
   }
 
   if (isExpoGo) {
@@ -634,16 +670,23 @@ export async function getAudioService(): Promise<AudioService> {
     return mockAudioService;
   }
 
-  try {
-    audioServiceInstance = await createRealAudioService();
-    // Initialize TrackPlayer before returning
-    await audioServiceInstance.setup();
-    return audioServiceInstance;
-  } catch (error) {
-    console.log('Failed to initialize audio service:', error);
-    audioServiceInstance = mockAudioService;
-    return mockAudioService;
-  }
+  audioServicePromise = (async (): Promise<AudioService> => {
+    try {
+      const service = await createRealAudioService();
+      // Initialize TrackPlayer before returning
+      await service.setup();
+      audioServiceInstance = service;
+      return service;
+    } catch (error) {
+      console.log('Failed to initialize audio service:', error);
+      audioServiceInstance = mockAudioService;
+      return mockAudioService;
+    } finally {
+      audioServicePromise = null;
+    }
+  })();
+
+  return audioServicePromise;
 }
 
 // Export for cleanup

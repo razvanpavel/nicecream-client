@@ -8,11 +8,6 @@ interface LoaderProps {
 
 export function Loader({ size = 64 }: LoaderProps): React.ReactElement {
   return (
-    <LottieView
-      source={loaderAnimation}
-      autoPlay
-      loop
-      style={{ width: size, height: size }}
-    />
+    <LottieView source={loaderAnimation} autoPlay loop style={{ width: size, height: size }} />
   );
 }

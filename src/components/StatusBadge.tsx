@@ -11,7 +11,11 @@ import { Text } from './ui';
 
 export function StatusBadge(): React.ReactElement | null {
   const insets = useSafeAreaInsets();
-  const { status, currentStreamUrl, error, playStream, clearError } = useAudioStore();
+  const status = useAudioStore((s) => s.status);
+  const currentStreamUrl = useAudioStore((s) => s.currentStreamUrl);
+  const error = useAudioStore((s) => s.error);
+  const playStream = useAudioStore((s) => s.playStream);
+  const clearError = useAudioStore((s) => s.clearError);
   const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
   const isOffline: boolean = useAppStore((state) => state.isOffline);
 

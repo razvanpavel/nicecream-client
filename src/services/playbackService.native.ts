@@ -1,5 +1,7 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
+import { env } from '@/config/env';
+
 // Check if running in Expo Go BEFORE importing any native modules
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
@@ -15,12 +17,10 @@ export function cleanupPlaybackService(): void {
     console.log('[PlaybackService] Expo Go - cleanup no-op');
     return;
   }
-  // Real cleanup happens in initRealPlaybackService
-  void import('react-native-track-player').then(() => {
-    // Cleanup is handled by the initialized service
-    console.log('[PlaybackService] Cleaning up event listeners...');
-    cleanupRealService();
-  });
+  // REL-4 fix: Call cleanupRealService() directly — it doesn't need TrackPlayer,
+  // it just iterates eventSubscriptions[].remove()
+  console.log('[PlaybackService] Cleaning up event listeners...');
+  cleanupRealService();
 }
 
 /**
@@ -88,8 +88,9 @@ async function initRealPlaybackService(): Promise<void> {
   const TrackPlayer = await import('react-native-track-player');
   const { default: TP, Event, State } = TrackPlayer;
 
-  // Import store after TrackPlayer to ensure proper initialization order
+  // Import store and streams after TrackPlayer to ensure proper initialization order
   const { useAudioStore } = await import('@/store/audioStore');
+  const { STREAMS } = await import('@/config/streams');
 
   // Remote play (from notification, lock screen, headphones)
   // For live streams, we ALWAYS reload - the buffer may be stale after pause/stop.
@@ -140,6 +141,44 @@ async function initRealPlaybackService(): Promise<void> {
     })
   );
 
+  // ENH-4: RemoteNext — switch to the next channel
+  eventSubscriptions.push(
+    TP.addEventListener(Event.RemoteNext, () => {
+      try {
+        const store = useAudioStore.getState();
+        const { currentStreamUrl } = store;
+        const currentIndex = STREAMS.findIndex((s) => s.url === currentStreamUrl);
+        const nextIndex = (currentIndex + 1) % STREAMS.length;
+        const nextStream = STREAMS[nextIndex];
+        if (nextStream !== undefined) {
+          console.log('[PlaybackService] RemoteNext - switching to', nextStream.name);
+          void store.playStream(nextStream.url, nextStream.name);
+        }
+      } catch (e: unknown) {
+        console.error('[PlaybackService] RemoteNext failed:', e);
+      }
+    })
+  );
+
+  // ENH-4: RemotePrevious — switch to the previous channel
+  eventSubscriptions.push(
+    TP.addEventListener(Event.RemotePrevious, () => {
+      try {
+        const store = useAudioStore.getState();
+        const { currentStreamUrl } = store;
+        const currentIndex = STREAMS.findIndex((s) => s.url === currentStreamUrl);
+        const prevIndex = (currentIndex - 1 + STREAMS.length) % STREAMS.length;
+        const prevStream = STREAMS[prevIndex];
+        if (prevStream !== undefined) {
+          console.log('[PlaybackService] RemotePrevious - switching to', prevStream.name);
+          void store.playStream(prevStream.url, prevStream.name);
+        }
+      } catch (e: unknown) {
+        console.error('[PlaybackService] RemotePrevious failed:', e);
+      }
+    })
+  );
+
   // Handle audio focus changes (phone calls, other apps, headphones, etc.)
   // This is crucial for Android audio focus management
   eventSubscriptions.push(
@@ -151,14 +190,17 @@ async function initRealPlaybackService(): Promise<void> {
 
       if (event.paused) {
         // Temporary audio focus loss (e.g., notification sound, phone call)
-        // Remember if we were playing so we can resume
-        const currentStatus = useAudioStore.getState().status;
-        wasPlayingBeforeDuck = currentStatus === 'playing';
-        console.log('[PlaybackService] Audio ducked, was playing:', wasPlayingBeforeDuck);
-
-        TP.pause().catch((e: unknown) => {
-          console.error('[PlaybackService] RemoteDuck pause failed:', e);
-        });
+        // REL-3 fix: Check TrackPlayer state directly instead of store status
+        // (store may say 'loading' during transitions while TP is actually Playing)
+        TP.getPlaybackState()
+          .then((tpState) => {
+            wasPlayingBeforeDuck = tpState.state === State.Playing;
+            console.log('[PlaybackService] Audio ducked, was playing:', wasPlayingBeforeDuck);
+            return TP.pause();
+          })
+          .catch((e: unknown) => {
+            console.error('[PlaybackService] RemoteDuck pause failed:', e);
+          });
       } else if (event.permanent) {
         // Permanent audio focus loss (another app took over audio)
         console.log('[PlaybackService] Audio focus lost permanently');
@@ -172,9 +214,21 @@ async function initRealPlaybackService(): Promise<void> {
         console.log('[PlaybackService] Audio focus regained, resuming:', wasPlayingBeforeDuck);
 
         if (wasPlayingBeforeDuck) {
-          TP.play().catch((e: unknown) => {
-            console.error('[PlaybackService] RemoteDuck play failed:', e);
-          });
+          // BUG-3 fix: Reload the live stream instead of resuming stale buffer.
+          // After an interruption (phone call, Siri), the buffer is stale —
+          // potentially minutes behind live. Reload to get the live edge.
+          const store = useAudioStore.getState();
+          const { currentStreamUrl, currentStreamName } = store;
+
+          if (currentStreamUrl !== null && currentStreamName !== null) {
+            console.log('[PlaybackService] RemoteDuck resume - reloading live stream');
+            void store.playStream(currentStreamUrl, currentStreamName);
+          } else {
+            // Fallback: no stream info, just try TP.play()
+            TP.play().catch((e: unknown) => {
+              console.error('[PlaybackService] RemoteDuck play failed:', e);
+            });
+          }
         }
         wasPlayingBeforeDuck = false;
       }
@@ -257,8 +311,8 @@ async function initRealPlaybackService(): Promise<void> {
           if (store.status === 'idle') {
             useAudioStore.setState({ status: 'loading' });
           }
-          // Fix 5: If buffering during active playback, start a timeout.
-          // If buffering persists >5s, show loading so the UI doesn't appear stuck.
+          // ENH-5: If buffering during active playback, show loading spinner
+          // after 1.5s (reduced from 5s) so users see feedback quickly
           if (store.status === 'playing') {
             clearBufferingTimeout();
             bufferingTimeoutId = setTimeout(() => {
@@ -267,7 +321,7 @@ async function initRealPlaybackService(): Promise<void> {
                 useAudioStore.setState({ status: 'loading' });
               }
               bufferingTimeoutId = null;
-            }, 5000);
+            }, 1500);
           }
           break;
         case State.Error:
@@ -330,9 +384,15 @@ async function initRealPlaybackService(): Promise<void> {
               ? `${channelName}: ${trackArtist} - ${trackTitle}`
               : `${channelName}: ${trackTitle}`;
 
+          // ENH-3: Use per-channel artwork if available
+          const currentStreamUrl = useAudioStore.getState().currentStreamUrl;
+          const matchingStream = STREAMS.find((s) => s.url === currentStreamUrl);
+          const artworkUrl = matchingStream?.artworkUrl ?? env.artworkUrl;
+
           TP.updateNowPlayingMetadata({
             title: lockScreenTitle,
-            artist: 'Nicecream.fm',
+            artist: env.appName,
+            artwork: artworkUrl,
           }).catch((e: unknown) => {
             console.error('[PlaybackService] Failed to update now playing metadata:', e);
           });

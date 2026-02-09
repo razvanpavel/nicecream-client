@@ -32,8 +32,8 @@ interface EventListenerEntry {
 }
 let eventListeners: EventListenerEntry[] = [];
 
-// P1 Fix: Visibility API handler reference
-let visibilityHandler: (() => void) | null = null;
+// REL-6: Stall debounce timer
+let stallTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 // Helper to get store lazily (avoids circular dependency)
 const getStore = (): typeof import('@/store/audioStore').useAudioStore =>
@@ -55,26 +55,58 @@ function removeAllEventListeners(): void {
   eventListeners = [];
 }
 
-// P1 Fix: Visibility API - pause when tab is hidden (optional behavior)
-function setupVisibilityHandler(): void {
-  if (typeof document === 'undefined' || visibilityHandler !== null) return;
-
-  visibilityHandler = (): void => {
-    // When tab becomes hidden, we could pause (configurable behavior)
-    // For now, we just track the state - live streams typically continue
-    // Uncomment below to pause on tab hide:
-    // if (document.hidden && isPlaying && audioElement !== null) {
-    //   audioElement.pause();
-    // }
-  };
-
-  document.addEventListener('visibilitychange', visibilityHandler);
+function clearStallTimeout(): void {
+  if (stallTimeoutId !== null) {
+    clearTimeout(stallTimeoutId);
+    stallTimeoutId = null;
+  }
 }
 
-function removeVisibilityHandler(): void {
-  if (typeof document === 'undefined' || visibilityHandler === null) return;
-  document.removeEventListener('visibilitychange', visibilityHandler);
-  visibilityHandler = null;
+// ENH-1: Media Session API integration
+function updateMediaSession(title: string, artist: string): void {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title,
+    artist,
+  });
+}
+
+function setupMediaSessionHandlers(): void {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+
+  navigator.mediaSession.setActionHandler('play', () => {
+    // Reload stream for live audio (buffer may be stale)
+    const store = getStore().getState();
+    const { currentStreamUrl, currentStreamName } = store;
+    if (currentStreamUrl !== null && currentStreamName !== null) {
+      void store.playStream(currentStreamUrl, currentStreamName);
+    }
+  });
+
+  navigator.mediaSession.setActionHandler('pause', () => {
+    if (audioElement !== null && !audioElement.paused) {
+      audioElement.pause();
+      isPlaying = false;
+    }
+  });
+
+  navigator.mediaSession.setActionHandler('stop', () => {
+    if (audioElement !== null) {
+      audioElement.pause();
+      audioElement.src = '';
+      isPlaying = false;
+    }
+  });
+}
+
+function clearMediaSession(): void {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+
+  navigator.mediaSession.metadata = null;
+  navigator.mediaSession.setActionHandler('play', null);
+  navigator.mediaSession.setActionHandler('pause', null);
+  navigator.mediaSession.setActionHandler('stop', null);
 }
 
 const webAudioService: AudioService = {
@@ -111,14 +143,31 @@ const webAudioService: AudioService = {
 
       // Handle buffering states
       addAudioEventListener('waiting', () => {
+        clearStallTimeout();
         // Skip state updates during controlled transitions
         const { isTransitioning } = getStore().getState();
         if (isTransitioning) return;
         getStore().setState({ status: 'loading' });
       });
 
+      // REL-6: Handle stalled event (fires ~3s into fetch failure)
+      addAudioEventListener('stalled', () => {
+        // Debounce to avoid flicker — only set loading if stall persists 1s
+        clearStallTimeout();
+        stallTimeoutId = setTimeout(() => {
+          const { isTransitioning } = getStore().getState();
+          if (isTransitioning) return;
+          if (audioElement !== null && !audioElement.paused) {
+            console.warn('[WebAudio] Stream stalled');
+            getStore().setState({ status: 'loading' });
+          }
+          stallTimeoutId = null;
+        }, 1000);
+      });
+
       addAudioEventListener('playing', () => {
         isPlaying = true;
+        clearStallTimeout();
         // Skip state updates during controlled transitions
         const { isTransitioning } = getStore().getState();
         if (isTransitioning) return;
@@ -131,6 +180,7 @@ const webAudioService: AudioService = {
 
       addAudioEventListener('pause', () => {
         isPlaying = false;
+        clearStallTimeout();
         // Only update state if we have a source (ignore when stopped)
         if (audioElement?.src !== undefined && audioElement.src !== '') {
           getStore().setState({ status: 'paused' });
@@ -139,10 +189,11 @@ const webAudioService: AudioService = {
 
       addAudioEventListener('ended', () => {
         isPlaying = false;
+        clearStallTimeout();
       });
 
-      // P1 Fix: Setup visibility handler
-      setupVisibilityHandler();
+      // ENH-1: Setup Media Session handlers
+      setupMediaSessionHandlers();
 
       resolve(true);
     });
@@ -151,7 +202,7 @@ const webAudioService: AudioService = {
   },
 
   // P0 Fix: Request ID to prevent stale request corruption
-  play: async (url: string, _title: string, signal?: AbortSignal): Promise<void> => {
+  play: async (url: string, title: string, signal?: AbortSignal): Promise<void> => {
     // Increment request ID to cancel any in-flight requests
     const thisRequestId = ++currentPlayRequestId;
 
@@ -199,6 +250,10 @@ const webAudioService: AudioService = {
       }
 
       isPlaying = true;
+
+      // ENH-1: Update Media Session metadata
+      const channelName = title.charAt(0).toUpperCase() + title.slice(1);
+      updateMediaSession(channelName, 'Nicecream.fm');
     } catch (e) {
       // Check if superseded - don't throw errors for stale requests
       if (isCancelled()) {
@@ -227,10 +282,11 @@ const webAudioService: AudioService = {
       audioElement.src = '';
       isPlaying = false;
     }
+    clearStallTimeout();
     return Promise.resolve();
   },
 
-  togglePlayback: async () => {
+  togglePlayback: async (): Promise<boolean> => {
     if (audioElement === null) {
       return false;
     }
@@ -249,8 +305,11 @@ const webAudioService: AudioService = {
     // Remove all audio element event listeners
     removeAllEventListeners();
 
-    // Remove visibility handler
-    removeVisibilityHandler();
+    // Clear Media Session
+    clearMediaSession();
+
+    // Clear stall timeout
+    clearStallTimeout();
 
     // Stop and clean up audio element
     if (audioElement !== null) {
@@ -322,6 +381,11 @@ export async function getAudioService(): Promise<AudioService> {
   audioServiceInstance = webAudioService;
   await audioServiceInstance.setup();
   return audioServiceInstance;
+}
+
+// ENH-1: Update web Media Session metadata from external sources (e.g., now playing hook)
+export function updateWebMediaSessionMetadata(title: string, artist: string): void {
+  updateMediaSession(title, artist);
 }
 
 // Export for cleanup

@@ -3,6 +3,7 @@ export interface StreamConfig {
   name: string;
   url: string;
   color: string;
+  artworkUrl?: string;
 }
 
 // Brand colors

@@ -24,8 +24,6 @@ const HEALTH_CHECK_INTERVAL_MS = 30000;
  */
 export function useAudioLifecycle(): void {
   const status = useAudioStore((state) => state.status);
-  const currentStreamUrl = useAudioStore((state) => state.currentStreamUrl);
-  const currentStreamName = useAudioStore((state) => state.currentStreamName);
 
   // Track when app went to background
   const backgroundTimeRef = useRef<number | null>(null);
@@ -51,51 +49,58 @@ export function useAudioLifecycle(): void {
   }, []);
 
   // Handle app state changes (foreground/background)
-  const handleAppStateChange = useCallback(
-    async (nextAppState: AppStateStatus): Promise<void> => {
-      if (isExpoGo) return;
+  // BUG-4 fix: Read status from store inside callback to avoid stale closures
+  const handleAppStateChange = useCallback(async (nextAppState: AppStateStatus): Promise<void> => {
+    if (isExpoGo) return;
 
-      console.log('[AudioLifecycle] AppState changed to:', nextAppState);
+    console.log('[AudioLifecycle] AppState changed to:', nextAppState);
 
-      if (nextAppState === 'background' || nextAppState === 'inactive') {
-        // App going to background
-        backgroundTimeRef.current = Date.now();
-        wasPlayingRef.current = status === 'playing';
-        console.log('[AudioLifecycle] App backgrounded, was playing:', wasPlayingRef.current);
-      } else if (nextAppState === 'active') {
-        // App coming to foreground
-        const backgroundTime = backgroundTimeRef.current;
-        backgroundTimeRef.current = null;
+    if (nextAppState === 'background' || nextAppState === 'inactive') {
+      // App going to background — read fresh status from store
+      const currentStatus = useAudioStore.getState().status;
+      backgroundTimeRef.current = Date.now();
+      wasPlayingRef.current = currentStatus === 'playing';
+      console.log('[AudioLifecycle] App backgrounded, was playing:', wasPlayingRef.current);
+    } else if (nextAppState === 'active') {
+      // App coming to foreground
+      const backgroundTime = backgroundTimeRef.current;
+      backgroundTimeRef.current = null;
 
-        // Only verify if we were playing and were backgrounded for a significant time
-        if (wasPlayingRef.current && backgroundTime !== null) {
-          const timeInBackground = Date.now() - backgroundTime;
-          console.log('[AudioLifecycle] App foregrounded after', timeInBackground, 'ms');
+      // Only verify if we were playing and were backgrounded for a significant time
+      if (wasPlayingRef.current && backgroundTime !== null) {
+        const timeInBackground = Date.now() - backgroundTime;
+        console.log('[AudioLifecycle] App foregrounded after', timeInBackground, 'ms');
 
-          if (timeInBackground > MIN_BACKGROUND_TIME_MS) {
-            // Give a moment for the audio system to stabilize after app foreground
-            await new Promise((resolve) => setTimeout(resolve, 500));
+        if (timeInBackground > MIN_BACKGROUND_TIME_MS) {
+          // Give a moment for the audio system to stabilize after app foreground
+          await new Promise((resolve) => setTimeout(resolve, 500));
 
-            try {
-              const audioService = await getAudioService();
-              const isActuallyPlaying = await audioService.verifyPlayback();
+          try {
+            const audioService = await getAudioService();
+            const isActuallyPlaying = await audioService.verifyPlayback();
 
-              console.log('[AudioLifecycle] Playback verified:', isActuallyPlaying);
+            // BUG-4 fix: Read fresh status from store instead of stale closure
+            const freshState = useAudioStore.getState();
 
-              if (!isActuallyPlaying && status === 'playing') {
-                // State says playing but audio isn't actually playing
-                console.log('[AudioLifecycle] Playback stalled, attempting reconnect...');
-                await audioService.reconnectStream();
+            console.log('[AudioLifecycle] Playback verified:', isActuallyPlaying);
+
+            if (!isActuallyPlaying && freshState.status === 'playing') {
+              // BUG-2 fix: Route through store for retry logic + circuit breaker
+              console.log('[AudioLifecycle] Playback stalled, reconnecting via store...');
+              if (freshState.currentStreamUrl !== null && freshState.currentStreamName !== null) {
+                void freshState.playStream(
+                  freshState.currentStreamUrl,
+                  freshState.currentStreamName
+                );
               }
-            } catch (error) {
-              console.error('[AudioLifecycle] Failed to verify/reconnect playback:', error);
             }
+          } catch (error) {
+            console.error('[AudioLifecycle] Failed to verify/reconnect playback:', error);
           }
         }
       }
-    },
-    [status]
-  );
+    }
+  }, []);
 
   // Set up AppState listener
   useEffect(() => {
@@ -174,61 +179,74 @@ export function useAudioLifecycle(): void {
     };
   }, [clearReconnectTimeout]);
 
-  // Periodic health check while playing
-  // Detects stalled playback, Bluetooth disconnection, audio route changes, etc.
+  // PERF-3 fix: Track playing state in a ref to avoid tearing down/recreating
+  // the health check interval on every status flicker (playing→loading→playing).
+  const isPlayingRef = useRef<boolean>(false);
+
+  // Update the ref when status changes, but only start/stop interval on actual transitions
   useEffect(() => {
     if (isExpoGo) return;
 
-    // Clear any existing interval
-    if (healthCheckIntervalRef.current !== null) {
-      clearInterval(healthCheckIntervalRef.current);
-      healthCheckIntervalRef.current = null;
-    }
+    const wasPlaying = isPlayingRef.current;
+    const isNowPlaying = status === 'playing';
+    isPlayingRef.current = isNowPlaying;
 
-    // Only run health checks when we think we're playing
-    if (status !== 'playing') {
-      healthCheckFailuresRef.current = 0;
-      return;
-    }
+    // Only act on actual transitions
+    if (wasPlaying === isNowPlaying) return;
 
-    const performHealthCheck = async (): Promise<void> => {
-      try {
-        const audioService = await getAudioService();
-        const isActuallyPlaying = await audioService.verifyPlayback();
+    if (isNowPlaying && healthCheckIntervalRef.current === null) {
+      // Transitioned to playing — start health checks
+      const performHealthCheck = async (): Promise<void> => {
+        // Read fresh status from store to avoid stale state
+        const freshStatus = useAudioStore.getState().status;
+        if (freshStatus !== 'playing') return;
 
-        if (!isActuallyPlaying) {
-          healthCheckFailuresRef.current++;
-          console.warn(
-            `[AudioLifecycle] Health check failed (${String(healthCheckFailuresRef.current)}/3)`
-          );
+        try {
+          const audioService = await getAudioService();
+          const isActuallyPlaying = await audioService.verifyPlayback();
 
-          // After 3 consecutive failures, attempt reconnection
-          if (healthCheckFailuresRef.current >= 3) {
-            console.log('[AudioLifecycle] Multiple health check failures, attempting reconnect...');
-            healthCheckFailuresRef.current = 0;
+          if (!isActuallyPlaying) {
+            healthCheckFailuresRef.current++;
+            console.warn(
+              `[AudioLifecycle] Health check failed (${String(healthCheckFailuresRef.current)}/2)`
+            );
 
-            if (currentStreamUrl !== null && currentStreamName !== null) {
-              void useAudioStore.getState().playStream(currentStreamUrl, currentStreamName);
+            // After 2 consecutive failures (with 2s sampling window each), attempt reconnection
+            if (healthCheckFailuresRef.current >= 2) {
+              console.log(
+                '[AudioLifecycle] Multiple health check failures, attempting reconnect...'
+              );
+              healthCheckFailuresRef.current = 0;
+
+              const store = useAudioStore.getState();
+              if (store.currentStreamUrl !== null && store.currentStreamName !== null) {
+                void store.playStream(store.currentStreamUrl, store.currentStreamName);
+              }
+            }
+          } else {
+            // Reset failure counter on successful check
+            if (healthCheckFailuresRef.current > 0) {
+              console.log('[AudioLifecycle] Health check recovered');
+              healthCheckFailuresRef.current = 0;
             }
           }
-        } else {
-          // Reset failure counter on successful check
-          if (healthCheckFailuresRef.current > 0) {
-            console.log('[AudioLifecycle] Health check recovered');
-            healthCheckFailuresRef.current = 0;
-          }
+        } catch (error) {
+          console.error('[AudioLifecycle] Health check error:', error);
         }
-      } catch (error) {
-        console.error('[AudioLifecycle] Health check error:', error);
-      }
-    };
+      };
 
-    // Start periodic health checks
-    healthCheckIntervalRef.current = setInterval(() => {
-      void performHealthCheck();
-    }, HEALTH_CHECK_INTERVAL_MS);
+      healthCheckIntervalRef.current = setInterval(() => {
+        void performHealthCheck();
+      }, HEALTH_CHECK_INTERVAL_MS);
 
-    console.log('[AudioLifecycle] Started periodic health checks');
+      console.log('[AudioLifecycle] Started periodic health checks');
+    } else if (!isNowPlaying && healthCheckIntervalRef.current !== null) {
+      // Transitioned away from playing — stop health checks
+      clearInterval(healthCheckIntervalRef.current);
+      healthCheckIntervalRef.current = null;
+      healthCheckFailuresRef.current = 0;
+      console.log('[AudioLifecycle] Stopped periodic health checks');
+    }
 
     return (): void => {
       if (healthCheckIntervalRef.current !== null) {
@@ -236,5 +254,5 @@ export function useAudioLifecycle(): void {
         healthCheckIntervalRef.current = null;
       }
     };
-  }, [status, currentStreamUrl, currentStreamName]);
+  }, [status]);
 }
