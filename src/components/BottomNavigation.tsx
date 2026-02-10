@@ -7,22 +7,16 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { isExpoGo } from '@/services/audioService';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
+import { cn } from '@/utils/cn';
 import { openMusicSearch, type MusicService } from '@/utils/musicSearch';
 
 import { ActionSheet, type ActionSheetOption } from './ActionSheet';
-import { HeartIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons';
+import { CloseIcon, HeartIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons';
 import { Loader } from './Loader';
 import { Text } from './ui';
 
-interface BottomNavigationProps {
-  onPrevious?: () => void;
-  onNext?: () => void;
-}
-
-export function BottomNavigation({
-  onPrevious,
-  onNext,
-}: BottomNavigationProps): React.ReactElement {
+export function BottomNavigation(): React.ReactElement {
+  const navigateChannel = useAppStore((s) => s.navigateChannel);
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
   const status = useAudioStore((s) => s.status);
@@ -33,6 +27,8 @@ export function BottomNavigation({
   const isPlayerSetup = useAppStore((state) => state.isPlayerSetup);
   const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
   const isOffline = useAppStore((state) => state.isOffline);
+  const isHomeVisible = useAppStore((s) => s.isHomeVisible);
+  const hasHomeDismissed = useAppStore((s) => s.hasHomeDismissed);
 
   const [showFavoriteSheet, setShowFavoriteSheet] = useState(false);
 
@@ -73,12 +69,12 @@ export function BottomNavigation({
 
   const handlePrevious = (): void => {
     void haptics.light();
-    onPrevious?.();
+    navigateChannel('prev');
   };
 
   const handleNext = (): void => {
     void haptics.light();
-    onNext?.();
+    navigateChannel('next');
   };
 
   const handleHeartPress = (): void => {
@@ -88,9 +84,11 @@ export function BottomNavigation({
     }
   };
 
+  const setHomeVisible = useAppStore((state) => state.setHomeVisible);
+
   const handleMenuPress = (): void => {
     void haptics.light();
-    // Menu functionality to be implemented
+    setHomeVisible(!isHomeVisible);
   };
 
   const handleMusicSearch = useCallback(
@@ -132,50 +130,57 @@ export function BottomNavigation({
     },
   ];
 
-  // Show track info only when playing and metadata is available
-  const showTrackInfo = isPlaying && streamMetadata !== null;
+  // Show track info only when playing and metadata has displayable content
+  const showTrackInfo = isPlaying && hasTrackInfo;
 
   return (
     <View
       className="absolute bottom-0 left-0 right-0 items-center justify-center"
-      style={{ paddingBottom: insets.bottom + 16 }}
+      // eslint-disable-next-line react-native/no-inline-styles
+      style={{ paddingBottom: insets.bottom + 16, zIndex: 2 }}
       pointerEvents="box-none"
     >
-      {/* Track Info or Stream Name */}
-      {showTrackInfo ? (
-        <View className="mb-8 items-center px-8">
-          {streamMetadata.title != null && streamMetadata.title !== '-' && (
-            <Text
-              className="text-center font-heading text-lg font-bold uppercase tracking-wider text-white"
-              numberOfLines={1}
-            >
-              {streamMetadata.title}
-            </Text>
-          )}
-          {streamMetadata.artist != null && streamMetadata.artist !== '-' && (
-            <Text
-              className="text-center text-base uppercase tracking-wider text-white"
-              numberOfLines={1}
-            >
-              {streamMetadata.artist}
-            </Text>
-          )}
-        </View>
-      ) : (
-        <View className="mb-8 items-center px-8">
+      {/* Track Info or Stream Name (invisible on home to preserve layout) */}
+      <View
+        className={cn('mb-8 items-center px-8', isHomeVisible && 'opacity-0')}
+        pointerEvents={isHomeVisible ? 'none' : 'auto'}
+      >
+        {showTrackInfo ? (
+          <>
+            {streamMetadata.title != null && streamMetadata.title !== '-' && (
+              <Text
+                className="text-center font-heading text-lg font-bold uppercase tracking-wider text-white"
+                numberOfLines={1}
+              >
+                {streamMetadata.title}
+              </Text>
+            )}
+            {streamMetadata.artist != null && streamMetadata.artist !== '-' && (
+              <Text
+                className="text-center text-base uppercase tracking-wider text-white"
+                numberOfLines={1}
+              >
+                {streamMetadata.artist}
+              </Text>
+            )}
+          </>
+        ) : (
           <Text className="text-center font-heading text-2xl font-bold lowercase text-white">
             {currentStream?.name ?? ''}
           </Text>
-        </View>
-      )}
+        )}
+      </View>
 
       {/* Playback Controls */}
       <View className="flex-row items-center justify-center gap-4">
         {/* Heart/Favorite Button */}
         <Pressable
           onPress={handleHeartPress}
-          disabled={!hasTrackInfo}
-          className={`"h-16 active:opacity-70" w-16 items-center justify-center ${!hasTrackInfo ? 'opacity-40' : ''}`}
+          disabled={!hasTrackInfo || isHomeVisible}
+          className={cn(
+            'h-16 w-16 items-center justify-center active:opacity-70',
+            isHomeVisible ? 'opacity-0' : !hasTrackInfo ? 'opacity-40' : ''
+          )}
         >
           <HeartIcon size={56} color="white" />
         </Pressable>
@@ -183,7 +188,11 @@ export function BottomNavigation({
         {/* Previous Button */}
         <Pressable
           onPress={handlePrevious}
-          className="h-16 w-16 items-center justify-center active:opacity-70"
+          disabled={isHomeVisible}
+          className={cn(
+            'h-16 w-16 items-center justify-center active:opacity-70',
+            isHomeVisible && 'opacity-0'
+          )}
         >
           <PrevIcon size={56} color="white" />
         </Pressable>
@@ -191,8 +200,11 @@ export function BottomNavigation({
         {/* Play/Pause Button */}
         <Pressable
           onPress={handlePlayPause}
-          disabled={isLoading || isOffline}
-          className={`h-16 w-16 items-center justify-center active:opacity-70 ${isOffline ? 'opacity-40' : ''}`}
+          disabled={isLoading || isOffline || isHomeVisible}
+          className={cn(
+            'h-16 w-16 items-center justify-center active:opacity-70',
+            isHomeVisible ? 'opacity-0' : isOffline ? 'opacity-40' : ''
+          )}
         >
           {isLoading ? (
             <Loader size={100} />
@@ -206,17 +218,29 @@ export function BottomNavigation({
         {/* Next Button */}
         <Pressable
           onPress={handleNext}
-          className="h-16 w-16 items-center justify-center active:opacity-70"
+          disabled={isHomeVisible}
+          className={cn(
+            'h-16 w-16 items-center justify-center active:opacity-70',
+            isHomeVisible && 'opacity-0'
+          )}
         >
           <NextIcon size={56} color="white" />
         </Pressable>
 
-        {/* Menu Button */}
+        {/* Menu / Close Toggle — hidden on initial home visit */}
         <Pressable
           onPress={handleMenuPress}
-          className="h-16 w-16 items-center justify-center active:opacity-70"
+          disabled={isHomeVisible && !hasHomeDismissed}
+          className={cn(
+            'h-16 w-16 items-center justify-center active:opacity-70',
+            isHomeVisible && !hasHomeDismissed && 'opacity-0'
+          )}
         >
-          <MenuIcon size={56} color="white" />
+          {isHomeVisible ? (
+            <CloseIcon size={38} color="white" />
+          ) : (
+            <MenuIcon size={56} color="white" />
+          )}
         </Pressable>
       </View>
 

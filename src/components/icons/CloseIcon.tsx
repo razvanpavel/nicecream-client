@@ -1,4 +1,4 @@
-import Svg, { Ellipse } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 
 interface CloseIconProps {
   size?: number;
@@ -7,21 +7,13 @@ interface CloseIconProps {
 
 export function CloseIcon({ size = 60, color = 'white' }: CloseIconProps): React.ReactElement {
   return (
-    <Svg width={size} height={size} viewBox="0 0 60 60" fill="none">
-      <Ellipse
-        cx="30.1846"
-        cy="30.1907"
-        rx="11"
-        ry="2"
-        transform="rotate(-45 30.1846 30.1907)"
+    <Svg width={size} height={size} viewBox="0 0 43 35" fill="none">
+      <Path
+        d="M29.9245 26.9789C29.7862 26.9806 29.6491 26.9534 29.522 26.899C29.3949 26.8445 29.2806 26.7642 29.1865 26.663L12.3163 9.81153C11.8946 9.39024 11.8946 8.73725 12.3163 8.31596C12.7381 7.89468 13.3918 7.89468 13.8135 8.31596L30.6626 25.1885C31.0844 25.6098 31.0844 26.2627 30.6626 26.684C30.4517 26.8947 30.1776 27 29.9245 27V26.9789Z"
         fill={color}
       />
-      <Ellipse
-        cx="11"
-        cy="2"
-        rx="11"
-        ry="2"
-        transform="matrix(-0.707107 -0.707107 -0.707107 0.707107 39.375 36.5547)"
+      <Path
+        d="M13.0544 26.9789C12.9161 26.9806 12.779 26.9534 12.6519 26.899C12.5248 26.8445 12.4105 26.7642 12.3163 26.663C11.8946 26.2417 11.8946 25.5887 12.3163 25.1674L29.1865 8.33703C29.6082 7.91574 30.2619 7.91574 30.6837 8.33703C31.1054 8.75831 31.1054 9.41131 30.6837 9.83259L13.7925 26.663C13.5816 26.8736 13.3074 26.9789 13.0544 26.9789Z"
         fill={color}
       />
     </Svg>

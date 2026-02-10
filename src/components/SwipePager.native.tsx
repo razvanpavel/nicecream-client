@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import PagerView, {
   type PagerViewOnPageSelectedEvent,
@@ -12,7 +12,6 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { useAppStore, type ChannelId } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
-import { BottomNavigation } from './BottomNavigation';
 import { ChannelScreen } from './ChannelScreen';
 // import { StatusBadge } from './StatusBadge';
 
@@ -67,6 +66,8 @@ export function SwipePager(): React.ReactElement {
   const setCurrentStreamIndex = useAppStore((state) => state.setCurrentStreamIndex);
   const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
   const initialPage = getInitialPage();
+  // Track which page is currently visible (for video pause/play)
+  const [activePage, setActivePage] = useState(initialPage);
   // Track programmatic jumps to avoid duplicate stream switches
   const isJumpingRef = useRef(false);
   // Track current page for navigation
@@ -112,6 +113,9 @@ export function SwipePager(): React.ReactElement {
         needsJump = true;
       }
 
+      // Update active page for video pause/play control
+      setActivePage(effectivePosition);
+
       // Sync stream index for logo (always based on effective position)
       const streamIndex = pageToStreamIndex(effectivePosition);
       setCurrentStreamIndex(streamIndex);
@@ -134,17 +138,23 @@ export function SwipePager(): React.ReactElement {
     [playStream, setCurrentStreamIndex]
   );
 
-  const handlePrevious = useCallback((): void => {
-    // Use currentPageRef for accurate page tracking (avoids stale closure)
-    const prevPage = currentPageRef.current - 1;
-    pagerRef.current?.setPage(Math.max(0, prevPage));
-  }, []);
+  // Consume navigation signals from appStore (sent by BottomNavigation)
+  const pendingNavigation = useAppStore((s) => s.pendingNavigation);
+  const clearPendingNavigation = useAppStore((s) => s.clearPendingNavigation);
 
-  const handleNext = useCallback((): void => {
-    // Use currentPageRef for accurate page tracking (avoids stale closure)
-    const nextPage = currentPageRef.current + 1;
-    pagerRef.current?.setPage(Math.min(INFINITE_PAGES.length - 1, nextPage));
-  }, []);
+  useEffect(() => {
+    if (pendingNavigation === null) return;
+
+    if (pendingNavigation === 'prev') {
+      const prevPage = currentPageRef.current - 1;
+      pagerRef.current?.setPage(Math.max(0, prevPage));
+    } else {
+      const nextPage = currentPageRef.current + 1;
+      pagerRef.current?.setPage(Math.min(INFINITE_PAGES.length - 1, nextPage));
+    }
+
+    clearPendingNavigation();
+  }, [pendingNavigation, clearPendingNavigation]);
 
   return (
     <View className="flex-1">
@@ -159,7 +169,7 @@ export function SwipePager(): React.ReactElement {
       >
         {INFINITE_PAGES.map((stream, index) => (
           <View key={`${stream.id}-${String(index)}`} className="flex-1">
-            <ChannelScreen stream={stream} />
+            <ChannelScreen stream={stream} isActive={index === activePage} />
           </View>
         ))}
       </PagerView>
@@ -175,9 +185,6 @@ export function SwipePager(): React.ReactElement {
 
       {/* Fixed Status Badge */}
       {/* <StatusBadge /> */}
-
-      {/* Fixed Bottom Navigation */}
-      <BottomNavigation onPrevious={handlePrevious} onNext={handleNext} />
     </View>
   );
 }

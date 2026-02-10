@@ -3,7 +3,6 @@ import Head from 'expo-router/head';
 import { useCallback, useEffect, useRef } from 'react';
 import { Platform, View } from 'react-native';
 
-import { BottomNavigation } from '@/components/BottomNavigation';
 import { ChannelScreen } from '@/components/ChannelScreen';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { STREAMS } from '@/config/streams';
@@ -40,6 +39,8 @@ export default function ChannelRoute(): React.ReactElement {
   const router = useRouter();
   const { status, currentStreamUrl, playStream, togglePlayback } = useAudioStore();
   const setCurrentStreamIndex = useAppStore((state) => state.setCurrentStreamIndex);
+  const pendingNavigation = useAppStore((s) => s.pendingNavigation);
+  const clearPendingNavigation = useAppStore((s) => s.clearPendingNavigation);
 
   // Touch swipe tracking
   const touchStartX = useRef<number | null>(null);
@@ -66,6 +67,14 @@ export default function ChannelRoute(): React.ReactElement {
       setCurrentStreamIndex(index);
     }
   }, [currentChannel, setCurrentStreamIndex]);
+
+  // Consume navigation signals from appStore (sent by BottomNavigation)
+  useEffect(() => {
+    if (pendingNavigation === null) return;
+    const { prev: prevChannel, next: nextChannel } = getAdjacentChannels(currentChannel);
+    router.replace(`/${pendingNavigation === 'prev' ? prevChannel : nextChannel}`);
+    clearPendingNavigation();
+  }, [pendingNavigation, clearPendingNavigation, currentChannel, router]);
 
   // When channel changes, switch stream if already playing
   useEffect(() => {
@@ -165,9 +174,6 @@ export default function ChannelRoute(): React.ReactElement {
 
         {/* Offline Banner */}
         <OfflineBanner />
-
-        {/* Fixed Bottom Navigation */}
-        <BottomNavigation onPrevious={handlePrevious} onNext={handleNext} />
       </View>
     </>
   );

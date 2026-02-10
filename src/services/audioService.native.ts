@@ -362,6 +362,17 @@ const createRealAudioService = async (): Promise<AudioService> => {
         console.log(`[AudioService] ${elapsed()} add() resolved`);
       }
 
+      // Set lock screen metadata early so the notification appears as soon as
+      // the track is loaded, rather than waiting for Playing state confirmation.
+      const channelName = title.charAt(0).toUpperCase() + title.slice(1);
+      await TP.updateNowPlayingMetadata({
+        title: channelName,
+        artist: env.appName,
+        artwork: env.artworkUrl,
+        isLiveStream: true,
+      });
+      console.log(`[AudioService] ${elapsed()} Early lock screen metadata set`);
+
       if (isCancelled()) {
         console.log(`[AudioService] ${elapsed()} Cancelled after load, cleaning up`);
         await TP.setPlayWhenReady(false);
@@ -432,8 +443,26 @@ const createRealAudioService = async (): Promise<AudioService> => {
             title: channelName,
             artist: env.appName,
             artwork: env.artworkUrl,
+            isLiveStream: true,
           });
           console.log(`[AudioService] ${elapsed()} Initial lock screen metadata set`);
+
+          // Re-assert TrackPlayer's audio session after expo-video's async
+          // VideoManager.setAppropriateAudioSessionOrWarn() settles.
+          // expo-video dispatches on managerQueue and overrides the mode to
+          // .moviePlayback — toggling playWhenReady re-triggers
+          // configureAudioSession() which sets .default mode back.
+          setTimeout(() => {
+            void (async (): Promise<void> => {
+              try {
+                await TP.setPlayWhenReady(false);
+                await TP.setPlayWhenReady(true);
+                console.log('[AudioService] Audio session re-asserted after expo-video settle');
+              } catch (e) {
+                console.warn('[AudioService] Audio session re-assertion failed:', e);
+              }
+            })();
+          }, 500);
 
           return;
         }

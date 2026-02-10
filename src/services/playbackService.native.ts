@@ -393,6 +393,7 @@ async function initRealPlaybackService(): Promise<void> {
             title: lockScreenTitle,
             artist: env.appName,
             artwork: artworkUrl,
+            isLiveStream: true,
           }).catch((e: unknown) => {
             console.error('[PlaybackService] Failed to update now playing metadata:', e);
           });

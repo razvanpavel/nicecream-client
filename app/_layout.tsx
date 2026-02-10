@@ -1,4 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { Asset } from 'expo-asset';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useFonts } from 'expo-font';
 import 'expo-insights';
@@ -7,12 +8,13 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { LogBox, Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { Asset } from 'expo-asset';
-
 import { queryClient } from '@/api/queryClient';
+import { BottomNavigation } from '@/components/BottomNavigation';
+import { HomeOverlay } from '@/components/HomeOverlay';
 import { CHANNEL_BACKGROUNDS } from '@/config/backgrounds';
 import { useAudioLifecycle } from '@/hooks/useAudioLifecycle';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
@@ -121,13 +123,17 @@ export default function RootLayout(): React.ReactElement | null {
   }
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView className="flex-1">
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+          </Stack>
+          <HomeOverlay />
+          <BottomNavigation />
+          <StatusBar style="auto" />
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

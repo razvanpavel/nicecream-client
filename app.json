@@ -12,21 +12,11 @@
       "bundleIdentifier": "fm.nicecream.app",
       "appleTeamId": "Y26P6FJZS5",
       "infoPlist": {
-        "UIBackgroundModes": [
-          "audio"
-        ],
+        "UIBackgroundModes": ["audio"],
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": [
-          "spotify",
-          "music",
-          "youtube",
-          "vnd.youtube.music"
-        ]
+        "LSApplicationQueriesSchemes": ["spotify", "music", "youtube", "vnd.youtube.music"]
       },
-      "associatedDomains": [
-        "applinks:nicecream.fm",
-        "applinks:www.nicecream.fm"
-      ]
+      "associatedDomains": ["applinks:nicecream.fm", "applinks:www.nicecream.fm"]
     },
     "android": {
       "adaptiveIcon": {
@@ -57,10 +47,7 @@
               "pathPrefix": "/"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
@@ -81,22 +68,15 @@
         {
           "ios": {
             "image": "./assets/images/splash.png",
-            "backgroundColor": "#ECECEC",
+            "backgroundColor": "#000000",
             "resizeMode": "cover",
-            "enableFullScreenImage_legacy": true,
-            "dark": {
-              "image": "./assets/images/splash-dark.png",
-              "backgroundColor": "#1A1A1A"
-            }
+            "enableFullScreenImage_legacy": true
           },
           "android": {
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 288,
-            "backgroundColor": "#ECECEC",
-            "dark": {
-              "image": "./assets/images/splash-icon-dark.png",
-              "backgroundColor": "#1A1A1A"
-            }
+            "resizeMode": "cover",
+            "backgroundColor": "#000000"
           }
         }
       ],
