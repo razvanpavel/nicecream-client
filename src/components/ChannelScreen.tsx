@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 
 import { CHANNEL_LOGOS } from '@/config/logos';
 import type { StreamConfig } from '@/config/streams';
@@ -23,16 +23,14 @@ export function ChannelScreen({ stream, isActive }: ChannelScreenProps): React.R
       {/* Subtle overlay for text legibility */}
       <View className="absolute inset-0 bg-black/5" pointerEvents="none" />
 
-      {/* Stream Logo - true screen center (web only, native uses SwipePager overlay) */}
-      {Platform.OS === 'web' && (
-        <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-          <Image
-            source={CHANNEL_LOGOS[channelId]}
-            className="aspect-square w-4/5 max-w-80"
-            contentFit="contain"
-          />
-        </View>
-      )}
+      {/* Stream Logo - centered on screen */}
+      <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
+        <Image
+          source={CHANNEL_LOGOS[channelId]}
+          style={{ width: 268, height: 268 }}
+          contentFit="contain"
+        />
+      </View>
     </View>
   );
 }

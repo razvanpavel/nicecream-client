@@ -51,6 +51,7 @@ function BackgroundVideo({ channel, effectiveActive }: BackgroundVideoProps): Re
   const player = useVideoPlayer(CHANNEL_BACKGROUNDS[channel], (player) => {
     player.loop = true;
     player.muted = true;
+    player.audioMixingMode = 'mixWithOthers';
   });
 
   // Track app foreground state so videos pause when backgrounded

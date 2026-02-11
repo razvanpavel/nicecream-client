@@ -66,6 +66,10 @@ export function useAudioLifecycle(): void {
       const backgroundTime = backgroundTimeRef.current;
       backgroundTimeRef.current = null;
 
+      // Reassert Now Playing metadata in case iOS cleared it while backgrounded
+      // (e.g. expo-video audio session interference, or OS garbage collection)
+      void useAudioStore.getState().reassertNowPlaying();
+
       // Only verify if we were playing and were backgrounded for a significant time
       if (wasPlayingRef.current && backgroundTime !== null) {
         const timeInBackground = Date.now() - backgroundTime;

@@ -127,15 +127,12 @@ const createRealAudioService = async (): Promise<AudioService> => {
     });
   };
 
-  // Re-assert the iOS audio session and Now Playing metadata.
-  // Called after expo-video unmounts so RNTP reclaims the session.
+  // Re-assert Now Playing metadata without interrupting playback.
+  // Only updates MPNowPlayingInfoCenter — no audio session toggle.
   const doReassertNowPlaying = async (): Promise<void> => {
     try {
       const state = await TP.getPlaybackState();
       if (state.state !== State.Playing) return;
-
-      await TP.setPlayWhenReady(false);
-      await TP.setPlayWhenReady(true);
 
       const track = await TP.getActiveTrack();
       if (track != null) {
@@ -474,13 +471,6 @@ const createRealAudioService = async (): Promise<AudioService> => {
             isLiveStream: true,
           });
           console.log(`[AudioService] ${elapsed()} Initial lock screen metadata set`);
-
-          // Schedule session re-assertion after expo-video's async settle.
-          // By ~800ms the overlay animation (400ms) has completed and the
-          // video player has unmounted, so RNTP can reclaim the audio session.
-          setTimeout(() => {
-            void doReassertNowPlaying();
-          }, 800);
 
           return;
         }

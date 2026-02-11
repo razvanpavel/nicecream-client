@@ -191,21 +191,20 @@ export function HomeOverlay(): React.ReactElement | null {
         >
           <Image
             source={streamsLogo}
-            // eslint-disable-next-line react-native/no-inline-styles
             style={{ width: LOGO_SIZE, height: LOGO_SIZE }}
             contentFit="contain"
           />
           <View className="absolute items-center justify-center" pointerEvents="none">
             {isLoading ? (
-              <Loader size={80} />
+              <Loader size={100} />
             ) : isPlaying ? (
-              <PauseIcon size={80} color="white" />
+              <PauseIcon size={100} color="white" />
             ) : (
-              <PlayIcon size={80} color="white" />
+              <PlayIcon size={100} color="white" />
             )}
           </View>
         </Pressable>
-        <View className="mt-6 gap-4 pb-16 grayscale" style={{ width: LOGO_SIZE }}>
+        <View className="mb-16 mt-8 gap-6 grayscale" style={{ width: LOGO_SIZE }}>
           {CHANNEL_BLOCKS.map((source, index) => (
             <Image
               key={index}

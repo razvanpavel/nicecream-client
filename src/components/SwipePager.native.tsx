@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import PagerView, {
@@ -6,10 +5,9 @@ import PagerView, {
   type PageScrollStateChangedNativeEvent,
 } from 'react-native-pager-view';
 
-import { CHANNEL_LOGOS } from '@/config/logos';
 import { STREAMS, type StreamConfig, getDefaultStreamIndex } from '@/config/streams';
 import { useHaptics } from '@/hooks/useHaptics';
-import { useAppStore, type ChannelId } from '@/store/appStore';
+import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
 import { ChannelScreen } from './ChannelScreen';
@@ -53,18 +51,11 @@ function pageToStreamIndex(position: number): number {
   return 1; // Green (position === 2)
 }
 
-// Map stream index to channel ID for logo lookup
-function streamIndexToChannelId(index: number): ChannelId {
-  const channelIds: ChannelId[] = ['red', 'green', 'blue'];
-  return channelIds[index] ?? 'green';
-}
-
 export function SwipePager(): React.ReactElement {
   const pagerRef = useRef<PagerView>(null);
   const haptics = useHaptics();
   const playStream = useAudioStore((state) => state.playStream);
   const setCurrentStreamIndex = useAppStore((state) => state.setCurrentStreamIndex);
-  const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
   const initialPage = getInitialPage();
   // Track which page is currently visible (for video pause/play)
   const [activePage, setActivePage] = useState(initialPage);
@@ -173,15 +164,6 @@ export function SwipePager(): React.ReactElement {
           </View>
         ))}
       </PagerView>
-
-      {/* Fixed Logo Overlay - stays centered while pages swipe */}
-      <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-        <Image
-          source={CHANNEL_LOGOS[streamIndexToChannelId(currentStreamIndex)]}
-          style={{ width: 268, height: 268 }}
-          contentFit="contain"
-        />
-      </View>
 
       {/* Fixed Status Badge */}
       {/* <StatusBadge /> */}
