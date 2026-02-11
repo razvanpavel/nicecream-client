@@ -1,0 +1,20 @@
+diff --git a/node_modules/expo-video/ios/VideoManager.swift b/node_modules/expo-video/ios/VideoManager.swift
+index 8ef093e..1824c7e 100644
+--- a/node_modules/expo-video/ios/VideoManager.swift
++++ b/node_modules/expo-video/ios/VideoManager.swift
+@@ -82,6 +82,15 @@ class VideoManager {
+       player.showNowPlayingNotification
+     }
+ 
++    // If no video player is outputting audio and none shows a Now Playing
++    // notification, there is no reason for expo-video to touch the shared
++    // AVAudioSession.  Skipping prevents interference with other audio
++    // frameworks (e.g. react-native-track-player) that rely on owning the
++    // session configuration for lock-screen / Dynamic Island controls.
++    if !isOutputtingAudio && !anyPlayerShowsNotification {
++      return
++    }
++
+     let shouldMixOverride = audioMixingMode == .mixWithOthers
+     let doNotMixOverride = audioMixingMode == .doNotMix
+     let shouldDuckOthers = audioMixingMode == .duckOthers && isOutputtingAudio
