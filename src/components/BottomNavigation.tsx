@@ -1,5 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Pressable, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { STREAMS } from '@/config/streams';
@@ -34,6 +40,19 @@ export function BottomNavigation(): React.ReactElement {
   // Controls appear only after the home overlay dismiss animation completes
   const hideNav = !isHomeFullyHidden;
   const showMenuButton = hasHomeDismissed;
+
+  const navOpacity = useSharedValue(hideNav ? 0 : 1);
+
+  useEffect(() => {
+    navOpacity.value = withTiming(hideNav ? 0 : 1, {
+      duration: 200,
+      easing: Easing.inOut(Easing.ease),
+    });
+  }, [hideNav, navOpacity]);
+
+  const animatedNavStyle = useAnimatedStyle(() => ({
+    opacity: navOpacity.value,
+  }));
 
   const [showFavoriteSheet, setShowFavoriteSheet] = useState(false);
 
@@ -145,92 +164,93 @@ export function BottomNavigation(): React.ReactElement {
       style={{ paddingBottom: insets.bottom + 16, zIndex: 2 }}
       pointerEvents="box-none"
     >
-      {/* Track Info or Stream Name (invisible on home to preserve layout) */}
-      <View
-        className={cn('mb-8 items-center px-8', hideNav && 'opacity-0')}
-        pointerEvents={hideNav ? 'none' : 'auto'}
-      >
-        {showTrackInfo ? (
-          <>
-            {streamMetadata.title != null && streamMetadata.title !== '-' && (
-              <Text
-                className="text-center font-heading text-lg font-bold uppercase tracking-wider text-white"
-                numberOfLines={1}
-              >
-                {streamMetadata.title}
-              </Text>
-            )}
-            {streamMetadata.artist != null && streamMetadata.artist !== '-' && (
-              <Text
-                className="text-center text-base uppercase tracking-wider text-white"
-                numberOfLines={1}
-              >
-                {streamMetadata.artist}
-              </Text>
-            )}
-          </>
-        ) : (
-          <Text className="text-center font-heading text-2xl font-bold lowercase text-white">
-            {currentStream?.name ?? ''}
-          </Text>
-        )}
+      {/* Track Info or Stream Name (fades with nav controls) */}
+      <View className="mb-8 items-center px-8" pointerEvents={hideNav ? 'none' : 'auto'}>
+        <Animated.View style={animatedNavStyle} className="items-center">
+          {showTrackInfo ? (
+            <>
+              {streamMetadata.title != null && streamMetadata.title !== '-' && (
+                <Text
+                  className="text-center font-heading text-lg font-bold uppercase tracking-wider text-white"
+                  numberOfLines={1}
+                >
+                  {streamMetadata.title}
+                </Text>
+              )}
+              {streamMetadata.artist != null && streamMetadata.artist !== '-' && (
+                <Text
+                  className="text-center text-base uppercase tracking-wider text-white"
+                  numberOfLines={1}
+                >
+                  {streamMetadata.artist}
+                </Text>
+              )}
+            </>
+          ) : (
+            <Text className="text-center font-heading text-2xl font-bold lowercase text-white">
+              {currentStream?.name ?? ''}
+            </Text>
+          )}
+        </Animated.View>
       </View>
 
       {/* Playback Controls */}
       <View className="flex-row items-center justify-center gap-6">
         {/* Heart/Favorite Button */}
-        <Pressable
-          onPress={handleHeartPress}
-          disabled={!hasTrackInfo || hideNav}
-          className={cn(
-            'h-16 w-16 items-center justify-center active:opacity-70',
-            hideNav ? 'opacity-0' : !hasTrackInfo ? 'opacity-40' : ''
-          )}
-        >
-          <HeartIcon size={56} color="white" />
-        </Pressable>
+        <Animated.View style={animatedNavStyle} pointerEvents={hideNav ? 'none' : 'auto'}>
+          <Pressable
+            onPress={handleHeartPress}
+            disabled={!hasTrackInfo || hideNav}
+            className={cn(
+              'h-16 w-16 items-center justify-center active:opacity-70',
+              !hasTrackInfo ? 'opacity-40' : ''
+            )}
+          >
+            <HeartIcon size={56} color="white" />
+          </Pressable>
+        </Animated.View>
 
         {/* Previous Button */}
-        <Pressable
-          onPress={handlePrevious}
-          disabled={hideNav}
-          className={cn(
-            'h-16 w-16 items-center justify-center active:opacity-70',
-            hideNav && 'opacity-0'
-          )}
-        >
-          <PrevIcon size={56} color="white" />
-        </Pressable>
+        <Animated.View style={animatedNavStyle} pointerEvents={hideNav ? 'none' : 'auto'}>
+          <Pressable
+            onPress={handlePrevious}
+            disabled={hideNav}
+            className="h-16 w-16 items-center justify-center active:opacity-70"
+          >
+            <PrevIcon size={56} color="white" />
+          </Pressable>
+        </Animated.View>
 
         {/* Play/Pause Button */}
-        <Pressable
-          onPress={handlePlayPause}
-          disabled={isLoading || isOffline || hideNav}
-          className={cn(
-            'h-16 w-16 items-center justify-center active:opacity-70',
-            hideNav ? 'opacity-0' : isOffline ? 'opacity-40' : ''
-          )}
-        >
-          {isLoading ? (
-            <Loader size={100} />
-          ) : isPlaying ? (
-            <PauseIcon size={64} color="white" />
-          ) : (
-            <PlayIcon size={64} color="white" />
-          )}
-        </Pressable>
+        <Animated.View style={animatedNavStyle} pointerEvents={hideNav ? 'none' : 'auto'}>
+          <Pressable
+            onPress={handlePlayPause}
+            disabled={isLoading || isOffline || hideNav}
+            className={cn(
+              'h-16 w-16 items-center justify-center active:opacity-70',
+              isOffline ? 'opacity-40' : ''
+            )}
+          >
+            {isLoading ? (
+              <Loader size={100} />
+            ) : isPlaying ? (
+              <PauseIcon size={64} color="white" />
+            ) : (
+              <PlayIcon size={64} color="white" />
+            )}
+          </Pressable>
+        </Animated.View>
 
         {/* Next Button */}
-        <Pressable
-          onPress={handleNext}
-          disabled={hideNav}
-          className={cn(
-            'h-16 w-16 items-center justify-center active:opacity-70',
-            hideNav && 'opacity-0'
-          )}
-        >
-          <NextIcon size={56} color="white" />
-        </Pressable>
+        <Animated.View style={animatedNavStyle} pointerEvents={hideNav ? 'none' : 'auto'}>
+          <Pressable
+            onPress={handleNext}
+            disabled={hideNav}
+            className="h-16 w-16 items-center justify-center active:opacity-70"
+          >
+            <NextIcon size={56} color="white" />
+          </Pressable>
+        </Animated.View>
 
         {/* Menu / Close Toggle — hidden on initial home visit */}
         <Pressable
