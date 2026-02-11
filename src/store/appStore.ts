@@ -8,6 +8,7 @@ interface AppState {
   isOffline: boolean;
   isHomeVisible: boolean;
   hasHomeDismissed: boolean;
+  isHomeFullyHidden: boolean;
   pendingNavigation: 'prev' | 'next' | null;
 
   // Actions
@@ -15,6 +16,7 @@ interface AppState {
   setPlayerSetup: (isSetup: boolean) => void;
   setOffline: (isOffline: boolean) => void;
   setHomeVisible: (visible: boolean) => void;
+  setHomeFullyHidden: (hidden: boolean) => void;
   navigateChannel: (direction: 'prev' | 'next') => void;
   clearPendingNavigation: () => void;
 }
@@ -25,6 +27,7 @@ export const useAppStore = create<AppState>((set) => ({
   isOffline: false,
   isHomeVisible: true,
   hasHomeDismissed: false,
+  isHomeFullyHidden: false,
   pendingNavigation: null,
 
   setCurrentStreamIndex: (index: number): void => {
@@ -43,8 +46,12 @@ export const useAppStore = create<AppState>((set) => ({
     if (!visible) {
       set({ isHomeVisible: false, hasHomeDismissed: true });
     } else {
-      set({ isHomeVisible: true });
+      set({ isHomeVisible: true, isHomeFullyHidden: false });
     }
+  },
+
+  setHomeFullyHidden: (hidden: boolean): void => {
+    set({ isHomeFullyHidden: hidden });
   },
 
   navigateChannel: (direction): void => {

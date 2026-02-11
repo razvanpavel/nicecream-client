@@ -9,6 +9,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { Grayscale } from 'react-native-color-matrix-image-filters';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -49,55 +50,42 @@ const TIMING_CONFIG = {
   easing: Easing.inOut(Easing.ease),
 };
 
+const LOGO_SIZE = 268;
 const DISMISS_THRESHOLD = 150;
 const DISMISS_VELOCITY = 500;
 
-export function HomeOverlay(): React.ReactElement {
-  const insets = useSafeAreaInsets();
-  const haptics = useHaptics();
-  const isHomeVisible = useAppStore((s) => s.isHomeVisible);
-  const setHomeVisible = useAppStore((s) => s.setHomeVisible);
-  const currentStreamIndex = useAppStore((s) => s.currentStreamIndex);
-  const isPlayerSetup = useAppStore((s) => s.isPlayerSetup);
-  const status = useAudioStore((s) => s.status);
-  const currentStreamUrl = useAudioStore((s) => s.currentStreamUrl);
-  const togglePlayback = useAudioStore((s) => s.togglePlayback);
-  const playStream = useAudioStore((s) => s.playStream);
-
-  const [isFullyHidden, setIsFullyHidden] = useState(false);
-  const isAnimatingRef = useRef(false);
-  const overlayHeightRef = useRef(0);
-  const translateY = useSharedValue(0);
-
-  // Intro video background
+// ---------------------------------------------------------------------------
+// IntroVideo — extracted so useVideoPlayer unmounts with the component,
+// releasing expo-video's hold on the iOS audio session.
+// ---------------------------------------------------------------------------
+function IntroVideo({ isVisible }: { isVisible: boolean }): React.ReactElement {
   const player = useVideoPlayer(introVideo, (p) => {
     p.loop = true;
     p.muted = true;
+    p.audioMixingMode = 'mixWithOthers';
   });
 
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  const isOverlayVisibleRef = useRef(isHomeVisible);
+  const isVisibleRef = useRef(isVisible);
 
   useEffect(() => {
-    isOverlayVisibleRef.current = isHomeVisible;
-  }, [isHomeVisible]);
+    isVisibleRef.current = isVisible;
+  }, [isVisible]);
 
-  // Pause/play video based on overlay visibility
+  // Pause/play based on overlay visibility
   useEffect(() => {
-    if (isHomeVisible && !isFullyHidden) {
+    if (isVisible) {
       player.play();
     } else {
       player.pause();
     }
-  }, [isHomeVisible, isFullyHidden, player]);
+  }, [isVisible, player]);
 
-  // Pause/play video on app background/foreground
+  // Pause/play on app background/foreground
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus): void => {
-      appStateRef.current = nextAppState;
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         player.pause();
-      } else if (nextAppState === 'active' && isOverlayVisibleRef.current) {
+      } else if (nextAppState === 'active' && isVisibleRef.current) {
         player.play();
       }
     };
@@ -107,6 +95,40 @@ export function HomeOverlay(): React.ReactElement {
       subscription.remove();
     };
   }, [player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={StyleSheet.absoluteFillObject}
+      contentFit="cover"
+      nativeControls={false}
+      allowsVideoFrameAnalysis={false}
+      allowsPictureInPicture={false}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// HomeOverlay
+// ---------------------------------------------------------------------------
+export function HomeOverlay(): React.ReactElement {
+  const insets = useSafeAreaInsets();
+  const haptics = useHaptics();
+  const isHomeVisible = useAppStore((s) => s.isHomeVisible);
+  const setHomeVisible = useAppStore((s) => s.setHomeVisible);
+  const setHomeFullyHidden = useAppStore((s) => s.setHomeFullyHidden);
+  const currentStreamIndex = useAppStore((s) => s.currentStreamIndex);
+  const isPlayerSetup = useAppStore((s) => s.isPlayerSetup);
+  const status = useAudioStore((s) => s.status);
+  const currentStreamUrl = useAudioStore((s) => s.currentStreamUrl);
+  const togglePlayback = useAudioStore((s) => s.togglePlayback);
+  const playStream = useAudioStore((s) => s.playStream);
+  const reassertNowPlaying = useAudioStore((s) => s.reassertNowPlaying);
+
+  const [isFullyHidden, setIsFullyHidden] = useState(false);
+  const isAnimatingRef = useRef(false);
+  const overlayHeightRef = useRef(0);
+  const translateY = useSharedValue(0);
 
   const currentStream = STREAMS[currentStreamIndex];
 
@@ -121,7 +143,11 @@ export function HomeOverlay(): React.ReactElement {
   const onHideComplete = useCallback((): void => {
     isAnimatingRef.current = false;
     setIsFullyHidden(true);
-  }, []);
+    setHomeFullyHidden(true);
+    // Video player unmounts when isFullyHidden becomes true.
+    // Wait briefly for expo-video native cleanup, then re-assert.
+    void reassertNowPlaying();
+  }, [setHomeFullyHidden, reassertNowPlaying]);
 
   const onShowComplete = useCallback((): void => {
     isAnimatingRef.current = false;
@@ -222,20 +248,13 @@ export function HomeOverlay(): React.ReactElement {
         // eslint-disable-next-line react-native/no-inline-styles
         style={[{ zIndex: 1 }, animatedStyle]}
       >
-        <VideoView
-          player={player}
-          style={StyleSheet.absoluteFillObject}
-          contentFit="cover"
-          nativeControls={false}
-          allowsVideoFrameAnalysis={false}
-          allowsPictureInPicture={false}
-        />
+        {!isFullyHidden && <IntroVideo isVisible={isHomeVisible} />}
         <ScrollView
           contentContainerClassName="w-full items-center"
           style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
           showsVerticalScrollIndicator={false}
         >
-          <View className="-mb-[134px] h-[50vh]" />
+          <View className="h-[50vh]" style={{ marginBottom: -(LOGO_SIZE / 2 + insets.top) }} />
           <Pressable
             onPress={handlePlayPause}
             disabled={isLoading}
@@ -243,8 +262,7 @@ export function HomeOverlay(): React.ReactElement {
           >
             <Image
               source={streamsLogo}
-              // eslint-disable-next-line react-native/no-inline-styles
-              style={{ width: 268, height: 268 }}
+              style={{ width: LOGO_SIZE, height: LOGO_SIZE }}
               contentFit="contain"
             />
             <View className="absolute items-center justify-center" pointerEvents="none">
@@ -257,14 +275,16 @@ export function HomeOverlay(): React.ReactElement {
               )}
             </View>
           </Pressable>
-          <View className="mt-6 w-[268px] gap-3" style={{ filter: [{ grayscale: 1 }] }}>
+          <View className="mt-6 gap-4 pb-12" style={{ width: LOGO_SIZE }}>
             {CHANNEL_BLOCKS.map((source, index) => (
-              <Image
-                key={index}
-                source={source}
-                className="aspect-[686/360] w-full"
-                contentFit="contain"
-              />
+              <Grayscale key={index}>
+                <Image
+                  source={source}
+                  className="w-full"
+                  style={{ aspectRatio: 686 / 360 }}
+                  contentFit="contain"
+                />
+              </Grayscale>
             ))}
           </View>
         </ScrollView>

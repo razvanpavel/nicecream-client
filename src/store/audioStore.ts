@@ -207,6 +207,7 @@ interface AudioState {
   togglePlayback: () => Promise<void>;
   stop: () => Promise<void>;
   seekToLive: () => Promise<void>;
+  reassertNowPlaying: () => Promise<void>;
   setStreamMetadata: (metadata: StreamMetadata) => void;
   setTrackPlayerAvailable: (available: boolean) => void;
   setUserInteracted: () => void;
@@ -664,6 +665,12 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       recordCircuitFailure();
       set({ status: 'error', error: categorized });
     }
+  },
+
+  reassertNowPlaying: async (): Promise<void> => {
+    if (isExpoGo) return;
+    const audioService = await getAudioService();
+    await audioService.reassertNowPlaying();
   },
 
   setStreamMetadata: (metadata: StreamMetadata): void => {

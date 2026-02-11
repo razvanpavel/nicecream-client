@@ -12,6 +12,8 @@ export interface AudioService {
   reconnectStream: () => Promise<void>;
   // Live stream control
   seekToLive: () => Promise<void>;
+  // Now Playing re-assertion after expo-video unmount
+  reassertNowPlaying: () => Promise<void>;
 }
 
 export function getAudioService(): Promise<AudioService>;

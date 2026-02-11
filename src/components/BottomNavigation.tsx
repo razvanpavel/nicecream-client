@@ -29,6 +29,11 @@ export function BottomNavigation(): React.ReactElement {
   const isOffline = useAppStore((state) => state.isOffline);
   const isHomeVisible = useAppStore((s) => s.isHomeVisible);
   const hasHomeDismissed = useAppStore((s) => s.hasHomeDismissed);
+  const isHomeFullyHidden = useAppStore((s) => s.isHomeFullyHidden);
+
+  // Controls appear only after the home overlay dismiss animation completes
+  const hideNav = !isHomeFullyHidden;
+  const showMenuButton = hasHomeDismissed;
 
   const [showFavoriteSheet, setShowFavoriteSheet] = useState(false);
 
@@ -142,8 +147,8 @@ export function BottomNavigation(): React.ReactElement {
     >
       {/* Track Info or Stream Name (invisible on home to preserve layout) */}
       <View
-        className={cn('mb-8 items-center px-8', isHomeVisible && 'opacity-0')}
-        pointerEvents={isHomeVisible ? 'none' : 'auto'}
+        className={cn('mb-8 items-center px-8', hideNav && 'opacity-0')}
+        pointerEvents={hideNav ? 'none' : 'auto'}
       >
         {showTrackInfo ? (
           <>
@@ -172,14 +177,14 @@ export function BottomNavigation(): React.ReactElement {
       </View>
 
       {/* Playback Controls */}
-      <View className="flex-row items-center justify-center gap-4">
+      <View className="flex-row items-center justify-center gap-6">
         {/* Heart/Favorite Button */}
         <Pressable
           onPress={handleHeartPress}
-          disabled={!hasTrackInfo || isHomeVisible}
+          disabled={!hasTrackInfo || hideNav}
           className={cn(
             'h-16 w-16 items-center justify-center active:opacity-70',
-            isHomeVisible ? 'opacity-0' : !hasTrackInfo ? 'opacity-40' : ''
+            hideNav ? 'opacity-0' : !hasTrackInfo ? 'opacity-40' : ''
           )}
         >
           <HeartIcon size={56} color="white" />
@@ -188,10 +193,10 @@ export function BottomNavigation(): React.ReactElement {
         {/* Previous Button */}
         <Pressable
           onPress={handlePrevious}
-          disabled={isHomeVisible}
+          disabled={hideNav}
           className={cn(
             'h-16 w-16 items-center justify-center active:opacity-70',
-            isHomeVisible && 'opacity-0'
+            hideNav && 'opacity-0'
           )}
         >
           <PrevIcon size={56} color="white" />
@@ -200,10 +205,10 @@ export function BottomNavigation(): React.ReactElement {
         {/* Play/Pause Button */}
         <Pressable
           onPress={handlePlayPause}
-          disabled={isLoading || isOffline || isHomeVisible}
+          disabled={isLoading || isOffline || hideNav}
           className={cn(
             'h-16 w-16 items-center justify-center active:opacity-70',
-            isHomeVisible ? 'opacity-0' : isOffline ? 'opacity-40' : ''
+            hideNav ? 'opacity-0' : isOffline ? 'opacity-40' : ''
           )}
         >
           {isLoading ? (
@@ -218,10 +223,10 @@ export function BottomNavigation(): React.ReactElement {
         {/* Next Button */}
         <Pressable
           onPress={handleNext}
-          disabled={isHomeVisible}
+          disabled={hideNav}
           className={cn(
             'h-16 w-16 items-center justify-center active:opacity-70',
-            isHomeVisible && 'opacity-0'
+            hideNav && 'opacity-0'
           )}
         >
           <NextIcon size={56} color="white" />
@@ -230,10 +235,10 @@ export function BottomNavigation(): React.ReactElement {
         {/* Menu / Close Toggle — hidden on initial home visit */}
         <Pressable
           onPress={handleMenuPress}
-          disabled={isHomeVisible && !hasHomeDismissed}
+          disabled={!showMenuButton}
           className={cn(
             'h-16 w-16 items-center justify-center active:opacity-70',
-            isHomeVisible && !hasHomeDismissed && 'opacity-0'
+            !showMenuButton && 'opacity-0'
           )}
         >
           {isHomeVisible ? (

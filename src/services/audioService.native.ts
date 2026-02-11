@@ -19,6 +19,8 @@ interface AudioService {
   reconnectStream: () => Promise<void>;
   // Live stream control
   seekToLive: () => Promise<void>;
+  // Now Playing re-assertion after expo-video unmount
+  reassertNowPlaying: () => Promise<void>;
 }
 
 // Mock service for Expo Go
@@ -51,6 +53,7 @@ const mockAudioService: AudioService = {
     console.log('[Mock Audio] Would seek to live');
     return Promise.resolve();
   },
+  reassertNowPlaying: (): Promise<void> => Promise.resolve(),
 };
 
 // Real service using TrackPlayer
@@ -122,6 +125,31 @@ const createRealAudioService = async (): Promise<AudioService> => {
         }, timeoutMs);
       });
     });
+  };
+
+  // Re-assert the iOS audio session and Now Playing metadata.
+  // Called after expo-video unmounts so RNTP reclaims the session.
+  const doReassertNowPlaying = async (): Promise<void> => {
+    try {
+      const state = await TP.getPlaybackState();
+      if (state.state !== State.Playing) return;
+
+      await TP.setPlayWhenReady(false);
+      await TP.setPlayWhenReady(true);
+
+      const track = await TP.getActiveTrack();
+      if (track != null) {
+        await TP.updateNowPlayingMetadata({
+          title: track.title ?? env.appName,
+          artist: track.artist ?? env.appName,
+          artwork: track.artwork ?? env.artworkUrl,
+          isLiveStream: true,
+        });
+      }
+      console.log('[AudioService] Now playing re-asserted');
+    } catch (e) {
+      console.warn('[AudioService] Now playing re-assertion failed:', e);
+    }
   };
 
   // Extract setup logic so it can be called from play()
@@ -447,22 +475,12 @@ const createRealAudioService = async (): Promise<AudioService> => {
           });
           console.log(`[AudioService] ${elapsed()} Initial lock screen metadata set`);
 
-          // Re-assert TrackPlayer's audio session after expo-video's async
-          // VideoManager.setAppropriateAudioSessionOrWarn() settles.
-          // expo-video dispatches on managerQueue and overrides the mode to
-          // .moviePlayback — toggling playWhenReady re-triggers
-          // configureAudioSession() which sets .default mode back.
+          // Schedule session re-assertion after expo-video's async settle.
+          // By ~800ms the overlay animation (400ms) has completed and the
+          // video player has unmounted, so RNTP can reclaim the audio session.
           setTimeout(() => {
-            void (async (): Promise<void> => {
-              try {
-                await TP.setPlayWhenReady(false);
-                await TP.setPlayWhenReady(true);
-                console.log('[AudioService] Audio session re-asserted after expo-video settle');
-              } catch (e) {
-                console.warn('[AudioService] Audio session re-assertion failed:', e);
-              }
-            })();
-          }, 500);
+            void doReassertNowPlaying();
+          }, 800);
 
           return;
         }
@@ -674,6 +692,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
         throw error;
       }
     },
+
+    reassertNowPlaying: doReassertNowPlaying,
   };
 };
 

@@ -28,11 +28,13 @@ const CHANNEL_BLOCKS = [
 ];
 /* eslint-enable @typescript-eslint/no-require-imports */
 
+const LOGO_SIZE = 268;
 const ANIMATION_DURATION = 400;
 
 export function HomeOverlay(): React.ReactElement | null {
   const isHomeVisible = useAppStore((s) => s.isHomeVisible);
   const setHomeVisible = useAppStore((s) => s.setHomeVisible);
+  const setHomeFullyHidden = useAppStore((s) => s.setHomeFullyHidden);
   const currentStreamIndex = useAppStore((s) => s.currentStreamIndex);
   const isPlayerSetup = useAppStore((s) => s.isPlayerSetup);
   const status = useAudioStore((s) => s.status);
@@ -117,6 +119,7 @@ export function HomeOverlay(): React.ReactElement | null {
       const hideTimer = setTimeout(() => {
         setIsMounted(false);
         isAnimatingRef.current = false;
+        setHomeFullyHidden(true);
       }, ANIMATION_DURATION);
       return (): void => {
         clearTimeout(hideTimer);
@@ -179,6 +182,7 @@ export function HomeOverlay(): React.ReactElement | null {
         contentContainerClassName="w-full items-center"
         showsVerticalScrollIndicator={false}
       >
+        {/* 134 = LOGO_SIZE / 2, centers logo at 50vh */}
         <View className="h-[calc(50vh-134px)]" />
         <Pressable
           onPress={handlePlayPause}
@@ -188,7 +192,7 @@ export function HomeOverlay(): React.ReactElement | null {
           <Image
             source={streamsLogo}
             // eslint-disable-next-line react-native/no-inline-styles
-            style={{ width: 268, height: 268 }}
+            style={{ width: LOGO_SIZE, height: LOGO_SIZE }}
             contentFit="contain"
           />
           <View className="absolute items-center justify-center" pointerEvents="none">
@@ -201,7 +205,7 @@ export function HomeOverlay(): React.ReactElement | null {
             )}
           </View>
         </Pressable>
-        <View className="mt-6 w-[268px] gap-3 pb-12 grayscale">
+        <View className="mt-6 gap-4 pb-16 grayscale" style={{ width: LOGO_SIZE }}>
           {CHANNEL_BLOCKS.map((source, index) => (
             <Image
               key={index}

@@ -14,6 +14,8 @@ interface AudioService {
   reconnectStream: () => Promise<void>;
   // Live stream control
   seekToLive: () => Promise<void>;
+  // Now Playing re-assertion after expo-video unmount
+  reassertNowPlaying: () => Promise<void>;
 }
 
 let audioElement: HTMLAudioElement | null = null;
@@ -348,6 +350,9 @@ const webAudioService: AudioService = {
       }
     }
   },
+
+  // No-op on web (only needed for iOS Now Playing)
+  reassertNowPlaying: (): Promise<void> => Promise.resolve(),
 
   // Seek to live for web - reload the stream
   seekToLive: async (): Promise<void> => {
