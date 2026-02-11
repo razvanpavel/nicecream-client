@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
   type AppStateStatus,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,6 +29,7 @@ import { useAudioStore } from '@/store/audioStore';
 
 import { PauseIcon, PlayIcon } from './icons';
 import { Loader } from './Loader';
+import { Text } from './ui';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const streamsLogo = require('../../assets/images/logos/streams.png') as number;
@@ -37,10 +39,10 @@ const introVideo = require('../../assets/images/backgrounds/intro.mp4') as numbe
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const CHANNEL_BLOCKS = [
-  require('../../assets/images/logos/channel-niteride.png') as number,
-  require('../../assets/images/logos/channel-suntrack.png') as number,
   require('../../assets/images/logos/channel-watermelon.png') as number,
+  require('../../assets/images/logos/channel-niteride.png') as number,
   require('../../assets/images/logos/channel-workit.png') as number,
+  require('../../assets/images/logos/channel-suntrack.png') as number,
   require('../../assets/images/logos/channel-chill.png') as number,
 ];
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -126,6 +128,7 @@ export function HomeOverlay(): React.ReactElement {
   const [isFullyHidden, setIsFullyHidden] = useState(false);
   const isAnimatingRef = useRef(false);
   const overlayHeightRef = useRef(0);
+  const scrollViewRef = useRef<ScrollView>(null);
   const translateY = useSharedValue(0);
 
   const currentStream = STREAMS[currentStreamIndex];
@@ -160,6 +163,13 @@ export function HomeOverlay(): React.ReactElement {
   if (isHomeVisible && isFullyHidden) {
     setIsFullyHidden(false);
   }
+
+  // Reset scroll position when overlay opens
+  useEffect(() => {
+    if (isHomeVisible) {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }
+  }, [isHomeVisible]);
 
   // Drive animation from visibility changes
   useEffect(() => {
@@ -245,6 +255,7 @@ export function HomeOverlay(): React.ReactElement {
       >
         <IntroVideo isVisible={isHomeVisible} />
         <ScrollView
+          ref={scrollViewRef}
           contentContainerClassName="w-full items-center"
           style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
           showsVerticalScrollIndicator={false}
@@ -270,7 +281,23 @@ export function HomeOverlay(): React.ReactElement {
               )}
             </View>
           </Pressable>
-          <View className="mb-16 mt-8 gap-6" style={{ width: LOGO_SIZE }}>
+          <Text className="mt-12 text-center font-heading text-lg font-bold uppercase text-white">
+            More channels coming soon
+          </Text>
+          <Pressable
+            onPress={(): void => {
+              void Linking.openURL('mailto:hi@nicecream.fm');
+            }}
+            className="active:opacity-70"
+          >
+            <Text className="text-center font-heading text-lg font-bold uppercase text-white">
+              say,{' '}
+              <Text className="font-heading text-lg font-bold text-white underline">
+                hi@nicecream.fm
+              </Text>
+            </Text>
+          </Pressable>
+          <View className="mb-16 mt-10 gap-6" style={{ width: LOGO_SIZE }}>
             {CHANNEL_BLOCKS.map((source, index) => (
               <Grayscale key={index}>
                 <Image

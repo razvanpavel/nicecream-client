@@ -26,6 +26,12 @@ export function cleanupPlaybackService(): void {
 /**
  * Playback service that runs in the background
  * This handles remote controls (lock screen, notification, headphones, etc.)
+ *
+ * IMPORTANT: All event listeners MUST be registered synchronously within this
+ * function. Using async imports creates a race window where early TrackPlayer
+ * events (PlaybackState, MetadataCommonReceived) fire before listeners exist,
+ * causing lost state updates and metadata. We use synchronous require() to
+ * ensure listeners are in place before any events can fire.
  */
 export function PlaybackService(): void {
   if (isExpoGo) {
@@ -33,8 +39,8 @@ export function PlaybackService(): void {
     return;
   }
 
-  // Initialize the real playback service
-  void initRealPlaybackService();
+  // Initialize the real playback service synchronously
+  initRealPlaybackService();
 }
 
 // ============================================================================
@@ -75,22 +81,25 @@ function cleanupRealService(): void {
   console.log('[PlaybackService] Cleanup complete');
 }
 
-async function initRealPlaybackService(): Promise<void> {
+function initRealPlaybackService(): void {
   // Guard against double initialization
   if (isServiceInitialized) {
     console.log('[PlaybackService] Already initialized, skipping');
     return;
   }
   isServiceInitialized = true;
-  console.log('[PlaybackService] Initializing event listeners...');
+  console.log('[PlaybackService] Initializing event listeners synchronously...');
 
-  // Dynamic import to avoid loading native module at parse time
-  const TrackPlayer = await import('react-native-track-player');
+  // Synchronous imports — event listeners MUST be registered before any
+  // TrackPlayer events can fire. Async imports create a race window.
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const TrackPlayer =
+    require('react-native-track-player') as typeof import('react-native-track-player');
   const { default: TP, Event, State } = TrackPlayer;
 
-  // Import store and streams after TrackPlayer to ensure proper initialization order
-  const { useAudioStore } = await import('@/store/audioStore');
-  const { STREAMS } = await import('@/config/streams');
+  const { useAudioStore } = require('@/store/audioStore') as typeof import('@/store/audioStore');
+  const { STREAMS } = require('@/config/streams') as typeof import('@/config/streams');
+  /* eslint-enable @typescript-eslint/no-require-imports */
 
   // Remote play (from notification, lock screen, headphones)
   // For live streams, we ALWAYS reload - the buffer may be stale after pause/stop.

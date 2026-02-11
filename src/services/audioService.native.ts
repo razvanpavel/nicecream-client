@@ -1,6 +1,23 @@
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 import { env } from '@/config/env';
+
+/**
+ * Force the iOS audio session back to exclusive (non-mixing) mode.
+ * expo-video's `mixWithOthers` continuously resets the session to mixing mode,
+ * which prevents lock screen controls and Dynamic Island from appearing.
+ * Call this before every TP.play() to reclaim exclusive audio focus.
+ */
+async function configureExclusiveAudioSession(): Promise<void> {
+  await Audio.setAudioModeAsync({
+    playsInSilentModeIOS: true,
+    staysActiveInBackground: true,
+    interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+    shouldDuckAndroid: false,
+    interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+  });
+}
 
 // Check if running in Expo Go - must be checked BEFORE any native module imports
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -134,6 +151,10 @@ const createRealAudioService = async (): Promise<AudioService> => {
       const state = await TP.getPlaybackState();
       if (state.state !== State.Playing) return;
 
+      // Reconfigure exclusive audio session — expo-video's ensurePlaying()
+      // on foreground may have reverted the session to mixWithOthers.
+      await configureExclusiveAudioSession();
+
       const track = await TP.getActiveTrack();
       if (track != null) {
         await TP.updateNowPlayingMetadata({
@@ -165,149 +186,64 @@ const createRealAudioService = async (): Promise<AudioService> => {
     console.log('[AudioService] Starting setup...');
 
     setupPromise = (async (): Promise<boolean> => {
+      // Always attempt setupPlayer — catch expected error if already initialized
+      // (e.g., after JS reload). Do NOT use getActiveTrack() as a proxy, because
+      // RNTP v4.1.2 may not throw after registerPlaybackService(), causing
+      // setupPlayer() and updateOptions() to be silently skipped.
       try {
-        // Check if already setup
-        const existingTrack = await TP.getActiveTrack();
-        console.log('[AudioService] Player already initialized, active track:', existingTrack?.id);
-        isSetup = true;
-      } catch {
-        console.log('[AudioService] Player not initialized, calling setupPlayer...');
-
-        // =======================================================================
-        // iOS Audio Session Configuration
-        // =======================================================================
-        // Category: Playback
-        //   - Allows background audio playback
-        //   - Audio continues when screen is locked
-        //   - Audio continues when app is backgrounded
-        //   - Silences other apps (exclusive audio)
-        //
-        // Mode: Default
-        //   - Standard playback mode for music/audio streaming
-        //   - No special processing (voice chat, measurement, etc.)
-        //
-        // Options:
-        //   - AllowAirPlay: Enables streaming to AirPlay devices
-        //   - AllowBluetoothA2DP: Enables high-quality stereo Bluetooth
-        //     (A2DP = Advanced Audio Distribution Profile)
-        //
-        // NOT using:
-        //   - MixWithOthers: Would allow other apps to play simultaneously
-        //     (not appropriate for a dedicated radio app)
-        //   - DuckOthers: Would lower other audio instead of stopping it
-        //     (not needed - we're the primary audio source)
-        //   - InterruptSpokenAudioAndMixWithOthers: For apps that briefly interrupt
-        //     (not appropriate for continuous streaming)
-        // =======================================================================
-
         await TP.setupPlayer({
-          // iOS audio session configuration
           iosCategory: IOSCategory.Playback,
           iosCategoryMode: IOSCategoryMode.Default,
           iosCategoryOptions: [
             IOSCategoryOptions.AllowAirPlay,
             IOSCategoryOptions.AllowBluetoothA2DP,
           ],
-
-          // =======================================================================
-          // Buffer Configuration (Android ExoPlayer settings)
-          // =======================================================================
-          // minBuffer: Minimum buffer before playback starts (seconds)
-          //   - Higher = longer initial load, more resilient to network hiccups
-          //   - 15s is a good balance for live streaming
           minBuffer: 15,
-
-          // maxBuffer: Maximum buffer size (seconds)
-          //   - For live streams, we don't need huge buffers
-          //   - 50s provides good resilience without wasting memory
           maxBuffer: 50,
-
-          // playBuffer: Buffer required to resume after rebuffer (seconds)
-          //   - Lower = faster resume after network issues
-          //   - 2s allows quick recovery
           playBuffer: 2,
-
-          // backBuffer: Cached audio behind playhead (seconds)
-          //   - 0 for live streams (no seeking backwards needed)
           backBuffer: 0,
-
-          // =======================================================================
-          // Audio Interruption Handling
-          // =======================================================================
-          // DISABLED: We handle interruptions manually in playbackService.native.ts
-          // via the RemoteDuck event. This gives us full control over the
-          // wasPlayingBeforeDuck smart resume logic.
-          //
-          // If autoHandleInterruptions is true, TrackPlayer automatically pauses/resumes
-          // on interruption, which can conflict with our manual handling and cause:
-          // - Double pause (pause twice, resume once = stuck paused)
-          // - Race conditions between automatic and manual handling
-          //
-          // With manual control, we can:
-          // - Track wasPlayingBeforeDuck state accurately
-          // - Decide when to resume vs stay paused after interruption
-          // - Handle permanent vs temporary audio focus loss differently
-          // =======================================================================
           autoHandleInterruptions: false,
         });
         console.log('[AudioService] setupPlayer complete');
-
-        // =======================================================================
-        // Player Options for Background Playback & Notifications
-        // =======================================================================
-
-        await TP.updateOptions({
-          // Android-specific background playback behavior
-          android: {
-            // ContinuePlayback: Keep playing when app is removed from recents
-            // This creates a foreground service that survives app termination
-            // Alternatives:
-            //   - StopPlaybackAndRemoveNotification: Stop when app killed
-            //   - PausePlayback: Pause but keep notification
-            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
-
-            // Pause when another app takes audio focus (phone calls, etc.)
-            // This ensures we don't fight for audio with other apps
-            alwaysPauseOnInterruption: true,
-          },
-
-          // Media controls shown on lock screen and notification
-          // ENH-4: Added SkipToNext/SkipToPrevious for channel switching
-          capabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.Stop,
-            Capability.SkipToNext,
-            Capability.SkipToPrevious,
-          ],
-
-          // Compact notification on Android (limited space)
-          compactCapabilities: [Capability.Play, Capability.Pause],
-
-          // Full notification capabilities
-          notificationCapabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.Stop,
-            Capability.SkipToNext,
-            Capability.SkipToPrevious,
-          ],
-
-          // Progress bar update interval (0 = disabled for live streams)
-          // Live streams don't have meaningful progress to display
-          progressUpdateEventInterval: 0,
-        });
-        console.log('[AudioService] updateOptions complete');
-
-        await TP.setRepeatMode(RepeatMode.Off);
-        console.log('[AudioService] setRepeatMode complete');
-
-        // Brief yield to let the native player fully initialize its audio session.
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        isSetup = true;
-        console.log('[AudioService] Setup complete');
+      } catch {
+        // Expected if player was already initialized (e.g., after JS reload)
+        console.log('[AudioService] Player already initialized');
       }
+
+      // ALWAYS configure options — they may not persist across JS reloads,
+      // and setupPlayer() being skipped shouldn't skip capabilities.
+      await TP.updateOptions({
+        android: {
+          appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
+          alwaysPauseOnInterruption: true,
+        },
+        capabilities: [
+          Capability.Play,
+          Capability.Pause,
+          Capability.Stop,
+          Capability.SkipToNext,
+          Capability.SkipToPrevious,
+        ],
+        compactCapabilities: [Capability.Play, Capability.Pause],
+        notificationCapabilities: [
+          Capability.Play,
+          Capability.Pause,
+          Capability.Stop,
+          Capability.SkipToNext,
+          Capability.SkipToPrevious,
+        ],
+        progressUpdateEventInterval: 0,
+      });
+      console.log('[AudioService] updateOptions complete');
+
+      await TP.setRepeatMode(RepeatMode.Off);
+      console.log('[AudioService] setRepeatMode complete');
+
+      // Brief yield to let the native player fully initialize its audio session.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      isSetup = true;
+      console.log('[AudioService] Setup complete');
       return isSetup;
     })();
 
@@ -440,6 +376,9 @@ const createRealAudioService = async (): Promise<AudioService> => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
+      // Reclaim exclusive audio session before play — expo-video's mixWithOthers
+      // may have overridden it while background videos were active.
+      await configureExclusiveAudioSession();
       await TP.play();
       console.log(`[AudioService] ${elapsed()} TP.play() resolved`);
 
@@ -525,6 +464,8 @@ const createRealAudioService = async (): Promise<AudioService> => {
       } else {
         // Resuming from pause - needs state confirmation like play()
         console.log('[AudioService] Resuming playback...');
+        // Reclaim exclusive audio session before resume
+        await configureExclusiveAudioSession();
         await TP.play();
 
         // Wait for Playing state with retry logic

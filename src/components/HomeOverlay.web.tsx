@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { STREAMS } from '@/config/streams';
 import { isExpoGo } from '@/services/audioService';
@@ -11,6 +11,7 @@ import { cn } from '@/utils/cn';
 
 import { PauseIcon, PlayIcon } from './icons';
 import { Loader } from './Loader';
+import { Text } from './ui';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const streamsLogo = require('../../assets/images/logos/streams.png') as number;
@@ -20,10 +21,10 @@ const introVideo = require('../../assets/images/backgrounds/intro.mp4') as numbe
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const CHANNEL_BLOCKS = [
-  require('../../assets/images/logos/channel-niteride.png') as number,
-  require('../../assets/images/logos/channel-suntrack.png') as number,
   require('../../assets/images/logos/channel-watermelon.png') as number,
+  require('../../assets/images/logos/channel-niteride.png') as number,
   require('../../assets/images/logos/channel-workit.png') as number,
+  require('../../assets/images/logos/channel-suntrack.png') as number,
   require('../../assets/images/logos/channel-chill.png') as number,
 ];
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -45,6 +46,7 @@ export function HomeOverlay(): React.ReactElement | null {
   const [isMounted, setIsMounted] = useState(isHomeVisible);
   const [isShowing, setIsShowing] = useState(isHomeVisible);
   const isAnimatingRef = useRef(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Intro video background
   const player = useVideoPlayer(introVideo, (p) => {
@@ -104,6 +106,8 @@ export function HomeOverlay(): React.ReactElement | null {
   // Handle CSS transition timing via async callbacks
   useEffect(() => {
     if (isHomeVisible) {
+      // Reset scroll position when overlay opens
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
       // Small delay to ensure DOM is mounted before triggering CSS transition
       const showTimer = setTimeout(() => {
         setIsShowing(true);
@@ -179,6 +183,7 @@ export function HomeOverlay(): React.ReactElement | null {
         />
       </View>
       <ScrollView
+        ref={scrollViewRef}
         contentContainerClassName="w-full items-center"
         showsVerticalScrollIndicator={false}
       >
@@ -204,7 +209,23 @@ export function HomeOverlay(): React.ReactElement | null {
             )}
           </View>
         </Pressable>
-        <View className="mb-16 mt-8 gap-6 grayscale" style={{ width: LOGO_SIZE }}>
+        <Text className="mt-12 text-center font-heading text-lg font-bold uppercase text-white">
+          More channels coming soon
+        </Text>
+        <Pressable
+          onPress={(): void => {
+            void Linking.openURL('mailto:hi@nicecream.fm');
+          }}
+          className="active:opacity-70"
+        >
+          <Text className="text-center font-heading text-lg font-bold uppercase text-white">
+            say,{' '}
+            <Text className="font-heading text-lg font-bold text-white underline">
+              hi@nicecream.fm
+            </Text>
+          </Text>
+        </Pressable>
+        <View className="mb-16 mt-10 gap-6 grayscale" style={{ width: LOGO_SIZE }}>
           {CHANNEL_BLOCKS.map((source, index) => (
             <Image
               key={index}
