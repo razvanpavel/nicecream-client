@@ -363,7 +363,7 @@ function initRealPlaybackService(): void {
   eventSubscriptions.push(
     TP.addEventListener(Event.MetadataCommonReceived, (event) => {
       // Skip metadata updates during stream transitions to prevent flash of old content
-      const { isTransitioning, currentStreamName } = useAudioStore.getState();
+      const { isTransitioning } = useAudioStore.getState();
       if (isTransitioning) {
         return;
       }
@@ -380,36 +380,43 @@ function initRealPlaybackService(): void {
       if (Object.keys(streamMetadata).length > 0) {
         useAudioStore.setState({ streamMetadata });
 
-        // Update lock screen metadata with channel name prefix
-        if (currentStreamName !== null) {
-          const channelName =
-            currentStreamName.charAt(0).toUpperCase() + currentStreamName.slice(1);
-          const trackTitle = streamMetadata.title ?? '';
-          const trackArtist = streamMetadata.artist ?? '';
-
-          // Format: "Green: track artist - track name" or just "Green: track name" if no artist
-          const lockScreenTitle =
-            trackArtist !== '' && trackArtist !== '-'
-              ? `${channelName}: ${trackArtist} - ${trackTitle}`
-              : `${channelName}: ${trackTitle}`;
-
-          // ENH-3: Use per-channel artwork if available
-          const currentStreamUrl = useAudioStore.getState().currentStreamUrl;
-          const matchingStream = STREAMS.find((s) => s.url === currentStreamUrl);
-          const artworkUrl = matchingStream?.artworkUrl ?? env.artworkUrl;
-
-          TP.updateNowPlayingMetadata({
-            title: lockScreenTitle,
-            artist: env.appName,
-            artwork: artworkUrl,
-            isLiveStream: true,
-          }).catch((e: unknown) => {
-            console.error('[PlaybackService] Failed to update now playing metadata:', e);
-          });
-        }
+        // Lock screen update is handled by the streamMetadata store subscriber
       }
     })
   );
+
+  // Sync streamMetadata changes to lock screen (covers both ICY and HTTP poll sources)
+  const unsubscribeMetadata = useAudioStore.subscribe((state, prevState) => {
+    if (
+      state.streamMetadata === prevState.streamMetadata ||
+      state.streamMetadata === null ||
+      state.currentStreamName === null
+    ) {
+      return;
+    }
+
+    const channelName =
+      state.currentStreamName.charAt(0).toUpperCase() + state.currentStreamName.slice(1);
+    const trackTitle = state.streamMetadata.title ?? '';
+    const trackArtist = state.streamMetadata.artist ?? '';
+
+    const lockScreenTitle =
+      trackArtist !== '' && trackArtist !== '-' ? `${trackArtist} - ${trackTitle}` : trackTitle;
+
+    const currentStreamUrl = state.currentStreamUrl;
+    const matchingStream = STREAMS.find((s) => s.url === currentStreamUrl);
+    const artworkUrl = matchingStream?.artworkUrl ?? env.artworkUrl;
+
+    TP.updateNowPlayingMetadata({
+      title: lockScreenTitle,
+      artist: `${env.appName} - ${channelName}`,
+      artwork: artworkUrl,
+      isLiveStream: true,
+    }).catch((e: unknown) => {
+      console.error('[PlaybackService] Failed to sync now playing metadata:', e);
+    });
+  });
+  eventSubscriptions.push({ remove: unsubscribeMetadata });
 
   console.log(
     `[PlaybackService] Initialized with ${String(eventSubscriptions.length)} event listeners`

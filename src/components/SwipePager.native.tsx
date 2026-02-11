@@ -3,14 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import PagerView, {
   type PagerViewOnPageSelectedEvent,
+  type PagerViewOnPageScrollEvent,
   type PageScrollStateChangedNativeEvent,
 } from 'react-native-pager-view';
 import Animated, {
-  Easing,
   type SharedValue,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
 } from 'react-native-reanimated';
 
 import { CHANNEL_LOGOS } from '@/config/logos';
@@ -24,19 +23,36 @@ import { ChannelScreen } from './ChannelScreen';
 
 const CHANNEL_IDS: ChannelId[] = ['red', 'green', 'blue'];
 
-const TIMING_CONFIG = { duration: 100, easing: Easing.inOut(Easing.ease) };
+function pageToStreamIndexWorklet(position: number): number {
+  'worklet';
+  if (position <= 0 || position === 3) return 2; // Blue
+  if (position === 1 || position >= 4) return 0; // Red
+  return 1; // Green
+}
 
 function CrossfadeLogo({
   channelId,
-  activeIndex,
+  scrollPosition,
 }: {
   channelId: ChannelId;
-  activeIndex: SharedValue<number>;
+  scrollPosition: SharedValue<number>;
 }): React.ReactElement {
   const targetIndex = CHANNEL_IDS.indexOf(channelId);
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(activeIndex.value === targetIndex ? 1 : 0, TIMING_CONFIG),
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    const pos = scrollPosition.value;
+    const floorPage = Math.floor(pos);
+    const ceilPage = Math.ceil(pos);
+    const fraction = pos - floorPage;
+
+    const floorStream = pageToStreamIndexWorklet(floorPage);
+    const ceilStream = pageToStreamIndexWorklet(ceilPage);
+
+    let opacity = 0;
+    if (floorStream === targetIndex) opacity += 1 - fraction;
+    if (ceilStream === targetIndex) opacity += fraction;
+
+    return { opacity: Math.min(1, opacity) };
+  });
 
   return (
     <Animated.View style={[{ position: 'absolute', width: 268, height: 268 }, animatedStyle]}>
@@ -95,8 +111,8 @@ export function SwipePager(): React.ReactElement {
   const initialPage = getInitialPage();
   // Track which page is currently visible (for video pause/play)
   const [activePage, setActivePage] = useState(initialPage);
-  // Shared value for crossfade logo animation
-  const activeStreamIndex = useSharedValue(pageToStreamIndex(initialPage));
+  // Shared value for gesture-driven crossfade logo animation
+  const scrollPosition = useSharedValue(initialPage);
   // Track programmatic jumps to avoid duplicate stream switches
   const isJumpingRef = useRef(false);
   // Track current page for navigation
@@ -113,6 +129,13 @@ export function SwipePager(): React.ReactElement {
       }
     },
     [haptics]
+  );
+
+  const handlePageScroll = useCallback(
+    (event: PagerViewOnPageScrollEvent): void => {
+      scrollPosition.value = event.nativeEvent.position + event.nativeEvent.offset;
+    },
+    [scrollPosition]
   );
 
   const handlePageSelected = useCallback(
@@ -160,17 +183,13 @@ export function SwipePager(): React.ReactElement {
       // Perform the visual jump AFTER initiating stream switch
       if (needsJump) {
         isJumpingRef.current = true;
+        scrollPosition.value = effectivePosition;
         pagerRef.current?.setPageWithoutAnimation(effectivePosition);
         currentPageRef.current = effectivePosition;
       }
     },
-    [playStream, setCurrentStreamIndex]
+    [playStream, setCurrentStreamIndex, scrollPosition]
   );
-
-  // Sync crossfade logo with active page
-  useEffect(() => {
-    activeStreamIndex.value = pageToStreamIndex(activePage);
-  }, [activePage, activeStreamIndex]);
 
   // Consume navigation signals from appStore (sent by BottomNavigation)
   const pendingNavigation = useAppStore((s) => s.pendingNavigation);
@@ -198,6 +217,7 @@ export function SwipePager(): React.ReactElement {
         style={{ flex: 1 }}
         initialPage={initialPage}
         onPageSelected={handlePageSelected}
+        onPageScroll={handlePageScroll}
         onPageScrollStateChanged={handlePageScrollStateChanged}
         overdrag={true}
       >
@@ -211,7 +231,7 @@ export function SwipePager(): React.ReactElement {
       {/* Fixed crossfade logo overlay */}
       <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
         {CHANNEL_IDS.map((id) => (
-          <CrossfadeLogo key={id} channelId={id} activeIndex={activeStreamIndex} />
+          <CrossfadeLogo key={id} channelId={id} scrollPosition={scrollPosition} />
         ))}
       </View>
 

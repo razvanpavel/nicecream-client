@@ -157,9 +157,13 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
       const track = await TP.getActiveTrack();
       if (track != null) {
+        const channelName =
+          track.title != null
+            ? track.title.charAt(0).toUpperCase() + track.title.slice(1)
+            : env.appName;
         await TP.updateNowPlayingMetadata({
-          title: track.title ?? env.appName,
-          artist: track.artist ?? env.appName,
+          title: channelName,
+          artist: `${env.appName} - ${channelName}`,
           artwork: track.artwork ?? env.artworkUrl,
           isLiveStream: true,
         });
@@ -232,7 +236,7 @@ const createRealAudioService = async (): Promise<AudioService> => {
           Capability.SkipToNext,
           Capability.SkipToPrevious,
         ],
-        progressUpdateEventInterval: 0,
+        progressUpdateEventInterval: 1,
       });
       console.log('[AudioService] updateOptions complete');
 
@@ -328,7 +332,7 @@ const createRealAudioService = async (): Promise<AudioService> => {
       const channelName = title.charAt(0).toUpperCase() + title.slice(1);
       await TP.updateNowPlayingMetadata({
         title: channelName,
-        artist: env.appName,
+        artist: `${env.appName} - ${channelName}`,
         artwork: env.artworkUrl,
         isLiveStream: true,
       });
@@ -405,7 +409,7 @@ const createRealAudioService = async (): Promise<AudioService> => {
           const channelName = title.charAt(0).toUpperCase() + title.slice(1);
           await TP.updateNowPlayingMetadata({
             title: channelName,
-            artist: env.appName,
+            artist: `${env.appName} - ${channelName}`,
             artwork: env.artworkUrl,
             isLiveStream: true,
           });

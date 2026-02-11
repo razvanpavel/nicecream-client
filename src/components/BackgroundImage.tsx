@@ -15,10 +15,15 @@ const ERROR_RECOVERY_COOLDOWN_MS = 2000;
 /**
  * Ensure the video player is actively playing, reloading the source if the OS
  * reclaimed resources while the app was backgrounded (status becomes 'idle' or 'error').
+ *
+ * When the player is idle/error, replaceAsync loads the source asynchronously.
+ * We skip the synchronous play() call in that case — the statusChange listener
+ * will call play() once the player reaches 'readyToPlay'.
  */
 function ensurePlaying(player: ReturnType<typeof useVideoPlayer>, channel: ChannelId): void {
   if (player.status === 'idle' || player.status === 'error') {
     void player.replaceAsync(CHANNEL_BACKGROUNDS[channel]);
+    return;
   }
   player.play();
 }
@@ -115,20 +120,25 @@ function BackgroundVideo({ channel, effectiveActive }: BackgroundVideoProps): Re
     };
   }, [player, channel]);
 
-  // Error recovery: listen for statusChange events on native
+  // Status change listener: auto-play when ready, recover from errors
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
     const statusSubscription = player.addListener('statusChange', (newStatus) => {
-      if (newStatus.status !== 'error') return;
+      if (!isActiveRef.current || appStateRef.current !== 'active') return;
 
-      console.warn(`[BackgroundImage] ${channel} video error, attempting recovery`);
+      if (newStatus.status === 'readyToPlay') {
+        player.play();
+        return;
+      }
 
-      const now = Date.now();
-      if (now - lastRecoveryRef.current < ERROR_RECOVERY_COOLDOWN_MS) return;
-      lastRecoveryRef.current = now;
+      if (newStatus.status === 'error') {
+        console.warn(`[BackgroundImage] ${channel} video error, attempting recovery`);
 
-      if (appStateRef.current === 'active' && isActiveRef.current) {
+        const now = Date.now();
+        if (now - lastRecoveryRef.current < ERROR_RECOVERY_COOLDOWN_MS) return;
+        lastRecoveryRef.current = now;
+
         ensurePlaying(player, channel);
       }
     });
