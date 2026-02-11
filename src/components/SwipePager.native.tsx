@@ -1,17 +1,53 @@
+import { Image } from 'expo-image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import PagerView, {
   type PagerViewOnPageSelectedEvent,
   type PageScrollStateChangedNativeEvent,
 } from 'react-native-pager-view';
+import Animated, {
+  Easing,
+  type SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
+import { CHANNEL_LOGOS } from '@/config/logos';
 import { STREAMS, type StreamConfig, getDefaultStreamIndex } from '@/config/streams';
 import { useHaptics } from '@/hooks/useHaptics';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, type ChannelId } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 
 import { ChannelScreen } from './ChannelScreen';
 // import { StatusBadge } from './StatusBadge';
+
+const CHANNEL_IDS: ChannelId[] = ['red', 'green', 'blue'];
+
+const TIMING_CONFIG = { duration: 100, easing: Easing.inOut(Easing.ease) };
+
+function CrossfadeLogo({
+  channelId,
+  activeIndex,
+}: {
+  channelId: ChannelId;
+  activeIndex: SharedValue<number>;
+}): React.ReactElement {
+  const targetIndex = CHANNEL_IDS.indexOf(channelId);
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(activeIndex.value === targetIndex ? 1 : 0, TIMING_CONFIG),
+  }));
+
+  return (
+    <Animated.View style={[{ position: 'absolute', width: 268, height: 268 }, animatedStyle]}>
+      <Image
+        source={CHANNEL_LOGOS[channelId]}
+        style={{ width: 268, height: 268 }}
+        contentFit="contain"
+      />
+    </Animated.View>
+  );
+}
 
 // For infinite scroll: [Blue, Red, Green, Blue, Red]
 // Build pages using indices - STREAMS array has exactly 3 elements [red, green, blue]
@@ -59,6 +95,8 @@ export function SwipePager(): React.ReactElement {
   const initialPage = getInitialPage();
   // Track which page is currently visible (for video pause/play)
   const [activePage, setActivePage] = useState(initialPage);
+  // Shared value for crossfade logo animation
+  const activeStreamIndex = useSharedValue(pageToStreamIndex(initialPage));
   // Track programmatic jumps to avoid duplicate stream switches
   const isJumpingRef = useRef(false);
   // Track current page for navigation
@@ -129,6 +167,11 @@ export function SwipePager(): React.ReactElement {
     [playStream, setCurrentStreamIndex]
   );
 
+  // Sync crossfade logo with active page
+  useEffect(() => {
+    activeStreamIndex.value = pageToStreamIndex(activePage);
+  }, [activePage, activeStreamIndex]);
+
   // Consume navigation signals from appStore (sent by BottomNavigation)
   const pendingNavigation = useAppStore((s) => s.pendingNavigation);
   const clearPendingNavigation = useAppStore((s) => s.clearPendingNavigation);
@@ -160,10 +203,17 @@ export function SwipePager(): React.ReactElement {
       >
         {INFINITE_PAGES.map((stream, index) => (
           <View key={`${stream.id}-${String(index)}`} className="flex-1">
-            <ChannelScreen stream={stream} isActive={index === activePage} />
+            <ChannelScreen stream={stream} isActive={index === activePage} showLogo={false} />
           </View>
         ))}
       </PagerView>
+
+      {/* Fixed crossfade logo overlay */}
+      <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
+        {CHANNEL_IDS.map((id) => (
+          <CrossfadeLogo key={id} channelId={id} activeIndex={activeStreamIndex} />
+        ))}
+      </View>
 
       {/* Fixed Status Badge */}
       {/* <StatusBadge /> */}

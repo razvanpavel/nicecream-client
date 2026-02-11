@@ -93,12 +93,17 @@ function BackgroundVideo({ channel, effectiveActive }: BackgroundVideoProps): Re
     }
 
     // Native: use AppState
+    // Only pause on 'background' — not 'inactive'. The inactive state is
+    // transient (app-switcher animation, control center) and pausing there
+    // races with the immediate 'active' transition, causing play() to not
+    // stick on foreground resume.
     const handleAppStateChange = (nextAppState: AppStateStatus): void => {
+      const prevState = appStateRef.current;
       appStateRef.current = nextAppState;
 
-      if (nextAppState === 'background' || nextAppState === 'inactive') {
+      if (nextAppState === 'background') {
         player.pause();
-      } else if (nextAppState === 'active' && isActiveRef.current) {
+      } else if (nextAppState === 'active' && prevState === 'background' && isActiveRef.current) {
         ensurePlaying(player, channel);
       }
     };

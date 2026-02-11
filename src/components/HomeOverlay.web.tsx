@@ -225,7 +225,7 @@ export function HomeOverlay(): React.ReactElement | null {
             </Text>
           </Text>
         </Pressable>
-        <View className="mb-16 mt-10 gap-6 grayscale" style={{ width: LOGO_SIZE }}>
+        <View className="mt-10 gap-6 grayscale" style={{ width: LOGO_SIZE }}>
           {CHANNEL_BLOCKS.map((source, index) => (
             <Image
               key={index}
@@ -235,6 +235,7 @@ export function HomeOverlay(): React.ReactElement | null {
             />
           ))}
         </View>
+        <View className="h-[50vh]" />
       </ScrollView>
     </View>
   );

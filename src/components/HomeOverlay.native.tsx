@@ -297,7 +297,7 @@ export function HomeOverlay(): React.ReactElement {
               </Text>
             </Text>
           </Pressable>
-          <View className="mb-16 mt-10 gap-6" style={{ width: LOGO_SIZE }}>
+          <View className="mt-10 gap-6" style={{ width: LOGO_SIZE }}>
             {CHANNEL_BLOCKS.map((source, index) => (
               <Grayscale key={index}>
                 <Image
@@ -309,6 +309,7 @@ export function HomeOverlay(): React.ReactElement {
               </Grayscale>
             ))}
           </View>
+          <View className="h-[50vh]" />
         </ScrollView>
       </Animated.View>
     </GestureDetector>

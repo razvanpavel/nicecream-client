@@ -10,9 +10,14 @@ import { BackgroundImage } from './BackgroundImage';
 interface ChannelScreenProps {
   stream: StreamConfig;
   isActive?: boolean;
+  showLogo?: boolean;
 }
 
-export function ChannelScreen({ stream, isActive }: ChannelScreenProps): React.ReactElement {
+export function ChannelScreen({
+  stream,
+  isActive,
+  showLogo = true,
+}: ChannelScreenProps): React.ReactElement {
   const channelId = stream.id as ChannelId;
 
   return (
@@ -24,13 +29,15 @@ export function ChannelScreen({ stream, isActive }: ChannelScreenProps): React.R
       <View className="absolute inset-0 bg-black/5" pointerEvents="none" />
 
       {/* Stream Logo - centered on screen */}
-      <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-        <Image
-          source={CHANNEL_LOGOS[channelId]}
-          style={{ width: 268, height: 268 }}
-          contentFit="contain"
-        />
-      </View>
+      {showLogo && (
+        <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
+          <Image
+            source={CHANNEL_LOGOS[channelId]}
+            style={{ width: 268, height: 268 }}
+            contentFit="contain"
+          />
+        </View>
+      )}
     </View>
   );
 }
