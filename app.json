@@ -2,7 +2,7 @@
   "expo": {
     "name": "Nicecream.fm",
     "slug": "nicecream-fm",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "nicecream",
@@ -12,11 +12,21 @@
       "bundleIdentifier": "fm.nicecream.app",
       "appleTeamId": "Y26P6FJZS5",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
+        "UIBackgroundModes": [
+          "audio"
+        ],
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["spotify", "music", "youtube", "vnd.youtube.music"]
+        "LSApplicationQueriesSchemes": [
+          "spotify",
+          "music",
+          "youtube",
+          "vnd.youtube.music"
+        ]
       },
-      "associatedDomains": ["applinks:nicecream.fm", "applinks:www.nicecream.fm"]
+      "associatedDomains": [
+        "applinks:nicecream.fm",
+        "applinks:www.nicecream.fm"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -47,7 +57,10 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
