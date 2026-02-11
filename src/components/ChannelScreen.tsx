@@ -16,7 +16,7 @@ export function ChannelScreen({ stream, isActive }: ChannelScreenProps): React.R
   const channelId = stream.id as ChannelId;
 
   return (
-    <View className="flex-1" style={{ backgroundColor: stream.color }}>
+    <View className="flex-1 bg-[#141414]">
       {/* Background Image Layer */}
       <BackgroundImage channel={channelId} {...(isActive !== undefined && { isActive })} />
 
