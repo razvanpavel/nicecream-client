@@ -163,7 +163,7 @@ export default function ChannelRoute(): React.ReactElement {
   return (
     <>
       <Head>
-        <title>{stream.name.toLowerCase()} - nicecream.fm</title>
+        <title>nicecream.fm - {stream.name.toLowerCase()} channel</title>
         <meta
           name="description"
           content={`listen to ${stream.name.toLowerCase()} channel on nicecream.fm`}
