@@ -5,6 +5,7 @@ import { Platform, View } from 'react-native';
 
 import { ChannelScreen } from '@/components/ChannelScreen';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { env } from '@/config/env';
 import { STREAMS } from '@/config/streams';
 import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
@@ -163,10 +164,10 @@ export default function ChannelRoute(): React.ReactElement {
   return (
     <>
       <Head>
-        <title>nicecream.fm - {stream.name.toLowerCase()} channel</title>
+        <title>{env.appName} - {stream.name.toLowerCase()}</title>
         <meta
           name="description"
-          content={`listen to ${stream.name.toLowerCase()} channel on nicecream.fm`}
+          content={`listen to ${stream.name.toLowerCase()} on ${env.appName}`}
         />
       </Head>
       <View className="relative flex-1">
