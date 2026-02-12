@@ -98,6 +98,7 @@ function initRealPlaybackService(): void {
   const { default: TP, Event, State } = TrackPlayer;
 
   const { useAudioStore } = require('@/store/audioStore') as typeof import('@/store/audioStore');
+  const { useAppStore } = require('@/store/appStore') as typeof import('@/store/appStore');
   const { STREAMS } = require('@/config/streams') as typeof import('@/config/streams');
   /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -162,6 +163,7 @@ function initRealPlaybackService(): void {
         if (nextStream !== undefined) {
           console.log('[PlaybackService] RemoteNext - switching to', nextStream.name);
           void store.playStream(nextStream.url, nextStream.name);
+          useAppStore.getState().setCurrentStreamIndex(nextIndex);
         }
       } catch (e: unknown) {
         console.error('[PlaybackService] RemoteNext failed:', e);
@@ -181,6 +183,7 @@ function initRealPlaybackService(): void {
         if (prevStream !== undefined) {
           console.log('[PlaybackService] RemotePrevious - switching to', prevStream.name);
           void store.playStream(prevStream.url, prevStream.name);
+          useAppStore.getState().setCurrentStreamIndex(prevIndex);
         }
       } catch (e: unknown) {
         console.error('[PlaybackService] RemotePrevious failed:', e);

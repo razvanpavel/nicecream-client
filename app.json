@@ -6,7 +6,7 @@
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "nicecream",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "fm.nicecream.app",
@@ -67,15 +67,9 @@
         "expo-splash-screen",
         {
           "ios": {
-            "image": "./assets/images/splash.png",
-            "backgroundColor": "#000000",
-            "resizeMode": "cover",
-            "enableFullScreenImage_legacy": true
+            "backgroundColor": "#000000"
           },
           "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 288,
-            "resizeMode": "cover",
             "backgroundColor": "#000000"
           }
         }

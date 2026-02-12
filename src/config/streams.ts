@@ -16,7 +16,7 @@ export const BRAND_COLORS = {
 export const STREAMS: StreamConfig[] = [
   {
     id: 'red',
-    name: 'Red',
+    name: 'red channel',
     url:
       process.env.EXPO_PUBLIC_STREAM_RED ??
       'https://play.nicecream.fm/radio/8000/red.mp3?1769154137',
@@ -24,7 +24,7 @@ export const STREAMS: StreamConfig[] = [
   },
   {
     id: 'green',
-    name: 'Green',
+    name: 'green channel',
     url:
       process.env.EXPO_PUBLIC_STREAM_GREEN ??
       'https://play.nicecream.fm/radio/8010/green.mp3?1769154137',
@@ -32,7 +32,7 @@ export const STREAMS: StreamConfig[] = [
   },
   {
     id: 'blue',
-    name: 'Blue',
+    name: 'blue channel',
     url:
       process.env.EXPO_PUBLIC_STREAM_BLUE ??
       'https://play.nicecream.fm/radio/8020/blue.mp3?1769154137',

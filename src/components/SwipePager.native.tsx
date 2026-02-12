@@ -107,6 +107,7 @@ export function SwipePager(): React.ReactElement {
   const pagerRef = useRef<PagerView>(null);
   const haptics = useHaptics();
   const playStream = useAudioStore((state) => state.playStream);
+  const currentStreamIndex = useAppStore((state) => state.currentStreamIndex);
   const setCurrentStreamIndex = useAppStore((state) => state.setCurrentStreamIndex);
   const initialPage = getInitialPage();
   // Track which page is currently visible (for video pause/play)
@@ -208,6 +209,19 @@ export function SwipePager(): React.ReactElement {
 
     clearPendingNavigation();
   }, [pendingNavigation, clearPendingNavigation]);
+
+  // Sync pager to external stream index changes (e.g. lock screen RemoteNext/Previous)
+  useEffect(() => {
+    const currentPageStreamIndex = pageToStreamIndex(currentPageRef.current);
+    if (currentStreamIndex !== currentPageStreamIndex) {
+      const targetPage = currentStreamIndex + 1; // Red(0)→1, Green(1)→2, Blue(2)→3
+      isJumpingRef.current = true;
+      scrollPosition.value = targetPage;
+      pagerRef.current?.setPageWithoutAnimation(targetPage);
+      currentPageRef.current = targetPage;
+      setActivePage(targetPage);
+    }
+  }, [currentStreamIndex, scrollPosition]);
 
   return (
     <View className="flex-1">

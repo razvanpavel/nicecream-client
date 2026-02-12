@@ -43,7 +43,7 @@ export function StatusBadge(): React.ReactElement | null {
       return (
         <View className="flex-row items-center rounded-full bg-white/20 px-3 py-1">
           <WifiOffIcon size={12} color="#EF4444" />
-          <Text size="xs" className="ml-1.5 font-heading uppercase tracking-wider text-red-400">
+          <Text size="xs" className="ml-1.5 font-heading uppercase text-red-400">
             offline
           </Text>
         </View>
@@ -53,7 +53,7 @@ export function StatusBadge(): React.ReactElement | null {
     if (isExpoGo) {
       return (
         <View className="rounded-full bg-white/20 px-3 py-1">
-          <Text size="xs" className="font-heading uppercase tracking-wider text-white/80">
+          <Text size="xs" className="font-heading uppercase text-white/80">
             expo go - no audio
           </Text>
         </View>
@@ -64,7 +64,7 @@ export function StatusBadge(): React.ReactElement | null {
       return (
         <View className="flex-row items-center rounded-full bg-white/20 px-3 py-1">
           <View className="mr-1.5 h-2 w-2 animate-pulse rounded-full bg-white/60" />
-          <Text size="xs" className="font-heading uppercase tracking-wider text-white/80">
+          <Text size="xs" className="font-heading uppercase text-white/80">
             connecting...
           </Text>
         </View>
@@ -75,7 +75,7 @@ export function StatusBadge(): React.ReactElement | null {
       return (
         <Pressable onPress={handleRetry}>
           <View className="rounded-full bg-white/20 px-3 py-1">
-            <Text size="xs" className="font-heading uppercase tracking-wider text-red-500">
+            <Text size="xs" className="font-heading uppercase text-red-500">
               {error?.message ?? 'error'} • tap to retry
             </Text>
           </View>
@@ -87,7 +87,7 @@ export function StatusBadge(): React.ReactElement | null {
       return (
         <View className="flex-row items-center rounded-full bg-white/20 px-3 py-1">
           <View className="mr-1.5 h-2 w-2 rounded-full bg-white" />
-          <Text size="xs" className="font-heading uppercase tracking-wider text-white/80">
+          <Text size="xs" className="font-heading uppercase text-white/80">
             now streaming
           </Text>
         </View>

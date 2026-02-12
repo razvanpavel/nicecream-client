@@ -4,7 +4,7 @@ import { Text as RNText, type TextProps as RNTextProps } from 'react-native';
 
 import { cn } from '@/utils/cn';
 
-const textVariants = cva('text-gray-900', {
+const textVariants = cva('text-gray-900 tracking-tighter', {
   variants: {
     variant: {
       default: '',

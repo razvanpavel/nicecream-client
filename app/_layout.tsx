@@ -123,7 +123,7 @@ export default function RootLayout(): React.ReactElement | null {
   }
 
   return (
-    <GestureHandlerRootView className="flex-1">
+    <GestureHandlerRootView className="flex-1 bg-black">
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <Stack screenOptions={{ headerShown: false }}>

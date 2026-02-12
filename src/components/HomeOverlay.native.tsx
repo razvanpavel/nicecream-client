@@ -117,6 +117,7 @@ export function HomeOverlay(): React.ReactElement {
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
   const isHomeVisible = useAppStore((s) => s.isHomeVisible);
+  const hasHomeDismissed = useAppStore((s) => s.hasHomeDismissed);
   const setHomeVisible = useAppStore((s) => s.setHomeVisible);
   const setHomeFullyHidden = useAppStore((s) => s.setHomeFullyHidden);
   const currentStreamIndex = useAppStore((s) => s.currentStreamIndex);
@@ -170,6 +171,15 @@ export function HomeOverlay(): React.ReactElement {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     }
   }, [isHomeVisible]);
+
+  // Auto-dismiss overlay when audio is playing and overlay hasn't been manually dismissed yet.
+  // Covers: app backgrounded before first dismiss → user plays from lock screen → reopens.
+  // Does NOT interfere with: user intentionally opening overlay via menu (hasHomeDismissed is true).
+  useEffect(() => {
+    if (isHomeVisible && !hasHomeDismissed && (status === 'playing' || status === 'loading')) {
+      setHomeVisible(false);
+    }
+  }, [isHomeVisible, hasHomeDismissed, status, setHomeVisible]);
 
   // Drive animation from visibility changes
   useEffect(() => {

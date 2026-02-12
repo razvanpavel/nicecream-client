@@ -171,23 +171,20 @@ export function BottomNavigation(): React.ReactElement {
             <>
               {streamMetadata.title != null && streamMetadata.title !== '-' && (
                 <Text
-                  className="text-center font-heading text-lg font-bold uppercase tracking-wider text-white"
+                  className="text-center font-heading text-lg font-bold uppercase text-white"
                   numberOfLines={1}
                 >
                   {streamMetadata.title}
                 </Text>
               )}
               {streamMetadata.artist != null && streamMetadata.artist !== '-' && (
-                <Text
-                  className="text-center text-base uppercase tracking-wider text-white"
-                  numberOfLines={1}
-                >
+                <Text className="text-center text-base uppercase text-white" numberOfLines={1}>
                   {streamMetadata.artist}
                 </Text>
               )}
             </>
           ) : (
-            <Text className="text-center font-heading text-2xl font-bold lowercase text-white">
+            <Text className="text-center font-heading text-3xl font-bold lowercase text-white">
               {currentStream?.name ?? ''}
             </Text>
           )}
