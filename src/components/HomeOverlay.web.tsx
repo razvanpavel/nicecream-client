@@ -9,7 +9,7 @@ import { useAppStore } from '@/store/appStore';
 import { useAudioStore } from '@/store/audioStore';
 import { cn } from '@/utils/cn';
 
-import { PauseIcon, PlayIcon } from './icons';
+import { AppStoreBadge, PauseIcon, PlayIcon } from './icons';
 import { Loader } from './Loader';
 import { Text } from './ui';
 
@@ -19,15 +19,15 @@ const streamsLogo = require('../../assets/images/logos/streams.png') as number;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const introVideo = require('../../assets/images/backgrounds/intro.mp4') as number;
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-const CHANNEL_BLOCKS = [
-  require('../../assets/images/logos/channel-watermelon.png') as number,
-  require('../../assets/images/logos/channel-niteride.png') as number,
-  require('../../assets/images/logos/channel-workit.png') as number,
-  require('../../assets/images/logos/channel-suntrack.png') as number,
-  require('../../assets/images/logos/channel-chill.png') as number,
-];
-/* eslint-enable @typescript-eslint/no-require-imports */
+// /* eslint-disable @typescript-eslint/no-require-imports */
+// const CHANNEL_BLOCKS = [
+//   require('../../assets/images/logos/channel-watermelon.png') as number,
+//   require('../../assets/images/logos/channel-niteride.png') as number,
+//   require('../../assets/images/logos/channel-workit.png') as number,
+//   require('../../assets/images/logos/channel-suntrack.png') as number,
+//   require('../../assets/images/logos/channel-chill.png') as number,
+// ];
+// /* eslint-enable @typescript-eslint/no-require-imports */
 
 const LOGO_SIZE = 268;
 const ANIMATION_DURATION = 400;
@@ -94,6 +94,22 @@ export function HomeOverlay(): React.ReactElement | null {
   const isPlaying = status === 'playing' && isCurrentStreamActive;
   const isLoading =
     (status === 'loading' && isCurrentStreamActive) || (!isPlayerSetup && !isExpoGo);
+
+  // Escape key dismisses overlay
+  useEffect(() => {
+    if (!isHomeVisible) return;
+
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setHomeVisible(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return (): void => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isHomeVisible, setHomeVisible]);
 
   // Synchronous state updates during render to avoid setState-in-effect lint errors
   if (isHomeVisible && !isMounted) {
@@ -182,13 +198,30 @@ export function HomeOverlay(): React.ReactElement | null {
           allowsPictureInPicture={false}
         />
       </View>
+      <View className="absolute left-0 right-0 top-0 z-10 items-center pt-10">
+        <Text className="font-heading text-4xl uppercase leading-none text-white">get</Text>
+        <Text className="font-heading text-4xl uppercase leading-none text-white">the</Text>
+        <Text className="mb-5 font-heading text-4xl uppercase leading-none text-white">app</Text>
+        <Pressable
+          onPress={(): void => {
+            void Linking.openURL('https://apps.apple.com/app/nicecream-fm/id6746425750');
+          }}
+        >
+          <AppStoreBadge width={120} height={40} />
+        </Pressable>
+      </View>
       <ScrollView
         ref={scrollViewRef}
         contentContainerClassName="w-full items-center"
         showsVerticalScrollIndicator={false}
       >
         {/* 134 = LOGO_SIZE / 2, centers logo at 50vh */}
-        <View className="h-[calc(50vh-134px)]" />
+        <Pressable
+          className="h-[calc(50vh-134px)] w-full"
+          onPress={(): void => {
+            setHomeVisible(false);
+          }}
+        />
         <Pressable
           onPress={handlePlayPause}
           disabled={isLoading}
@@ -201,15 +234,15 @@ export function HomeOverlay(): React.ReactElement | null {
           />
           <View className="absolute items-center justify-center" pointerEvents="none">
             {isLoading ? (
-              <Loader size={100} />
+              <Loader size={104} />
             ) : isPlaying ? (
-              <PauseIcon size={100} color="white" />
+              <PauseIcon size={104} color="white" />
             ) : (
-              <PlayIcon size={100} color="white" />
+              <PlayIcon size={104} color="white" />
             )}
           </View>
         </Pressable>
-        <Text className="mt-12 text-center font-heading text-lg font-bold uppercase text-white">
+        <Text className="mt-12 text-center font-heading text-xl font-bold uppercase text-white">
           More channels coming soon
         </Text>
         <Pressable
@@ -218,14 +251,14 @@ export function HomeOverlay(): React.ReactElement | null {
           }}
           className="active:opacity-70"
         >
-          <Text className="text-center font-heading text-lg font-bold uppercase text-white">
+          <Text className="text-center font-heading text-xl font-bold uppercase text-white">
             say,{' '}
-            <Text className="font-heading text-lg font-bold text-white underline">
+            <Text className="font-heading text-xl font-bold text-white underline">
               hi@nicecream.fm
             </Text>
           </Text>
         </Pressable>
-        <View className="mt-10 gap-6 grayscale" style={{ width: LOGO_SIZE }}>
+        {/* <View className="mt-10 gap-6 grayscale" style={{ width: LOGO_SIZE }}>
           {CHANNEL_BLOCKS.map((source, index) => (
             <Image
               key={index}
@@ -234,8 +267,13 @@ export function HomeOverlay(): React.ReactElement | null {
               contentFit="contain"
             />
           ))}
-        </View>
-        <View className="h-[50vh]" />
+        </View> */}
+        {/* <Pressable
+          className="h-[50vh] w-full"
+          onPress={(): void => {
+            setHomeVisible(false);
+          }}
+        /> */}
       </ScrollView>
     </View>
   );

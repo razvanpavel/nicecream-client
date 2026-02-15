@@ -157,10 +157,7 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
       const track = await TP.getActiveTrack();
       if (track != null) {
-        const channelName =
-          track.title != null
-            ? track.title.charAt(0).toUpperCase() + track.title.slice(1)
-            : env.appName;
+        const channelName = track.title ?? env.appName;
         await TP.updateNowPlayingMetadata({
           title: channelName,
           artist: `${env.appName} - ${channelName}`,
@@ -329,10 +326,9 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
       // Set lock screen metadata early so the notification appears as soon as
       // the track is loaded, rather than waiting for Playing state confirmation.
-      const channelName = title.charAt(0).toUpperCase() + title.slice(1);
       await TP.updateNowPlayingMetadata({
-        title: channelName,
-        artist: `${env.appName} - ${channelName}`,
+        title: title,
+        artist: `${env.appName} - ${title}`,
         artwork: env.artworkUrl,
         isLiveStream: true,
       });
@@ -406,10 +402,9 @@ const createRealAudioService = async (): Promise<AudioService> => {
 
           // Set initial lock screen metadata immediately so the notification
           // appears right away instead of waiting for MetadataCommonReceived
-          const channelName = title.charAt(0).toUpperCase() + title.slice(1);
           await TP.updateNowPlayingMetadata({
-            title: channelName,
-            artist: `${env.appName} - ${channelName}`,
+            title: title,
+            artist: `${env.appName} - ${title}`,
             artwork: env.artworkUrl,
             isLiveStream: true,
           });

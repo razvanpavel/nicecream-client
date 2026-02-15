@@ -254,8 +254,7 @@ const webAudioService: AudioService = {
       isPlaying = true;
 
       // ENH-1: Update Media Session metadata
-      const channelName = title.charAt(0).toUpperCase() + title.slice(1);
-      updateMediaSession(channelName, 'nicecream.fm');
+      updateMediaSession(title, 'nicecream.fm');
     } catch (e) {
       // Check if superseded - don't throw errors for stale requests
       if (isCancelled()) {

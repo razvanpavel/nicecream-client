@@ -1,3 +1,4 @@
+export { AppStoreBadge } from './AppStoreBadge';
 export { CaretLeft } from './CaretLeft';
 export { CaretRight } from './CaretRight';
 export { CloseIcon } from './CloseIcon';

@@ -5,13 +5,14 @@ import {
   AppState,
   type AppStateStatus,
   Linking,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import { Grayscale } from 'react-native-color-matrix-image-filters';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+// import { Grayscale } from 'react-native-color-matrix-image-filters';
+import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -37,15 +38,15 @@ const streamsLogo = require('../../assets/images/logos/streams.png') as number;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const introVideo = require('../../assets/images/backgrounds/intro.mp4') as number;
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-const CHANNEL_BLOCKS = [
-  require('../../assets/images/logos/channel-watermelon.png') as number,
-  require('../../assets/images/logos/channel-niteride.png') as number,
-  require('../../assets/images/logos/channel-workit.png') as number,
-  require('../../assets/images/logos/channel-suntrack.png') as number,
-  require('../../assets/images/logos/channel-chill.png') as number,
-];
-/* eslint-enable @typescript-eslint/no-require-imports */
+// /* eslint-disable @typescript-eslint/no-require-imports */
+// const CHANNEL_BLOCKS = [
+//   require('../../assets/images/logos/channel-watermelon.png') as number,
+//   require('../../assets/images/logos/channel-niteride.png') as number,
+//   require('../../assets/images/logos/channel-workit.png') as number,
+//   require('../../assets/images/logos/channel-suntrack.png') as number,
+//   require('../../assets/images/logos/channel-chill.png') as number,
+// ];
+// /* eslint-enable @typescript-eslint/no-require-imports */
 
 const TIMING_CONFIG = {
   duration: 400,
@@ -131,6 +132,7 @@ export function HomeOverlay(): React.ReactElement {
   const overlayHeightRef = useRef(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const translateY = useSharedValue(0);
+  const scrollOffset = useSharedValue(0);
 
   const currentStream = STREAMS[currentStreamIndex];
 
@@ -213,26 +215,37 @@ export function HomeOverlay(): React.ReactElement {
     setHomeVisible(false);
   }, [setHomeVisible]);
 
-  const panGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetY(10)
-        .onUpdate((event) => {
-          'worklet';
-          if (event.translationY > 0) {
-            translateY.value = event.translationY;
-          }
-        })
-        .onEnd((event) => {
-          'worklet';
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>): void => {
+      scrollOffset.value = e.nativeEvent.contentOffset.y;
+    },
+    [scrollOffset]
+  );
+
+  const composedGesture = useMemo(() => {
+    const panGesture = Gesture.Pan()
+      .activeOffsetY(10)
+      .onUpdate((event) => {
+        'worklet';
+        if (scrollOffset.value <= 0 && event.translationY > 0) {
+          translateY.value = event.translationY;
+        }
+      })
+      .onEnd((event) => {
+        'worklet';
+        if (translateY.value > 0) {
           if (event.translationY > DISMISS_THRESHOLD || event.velocityY > DISMISS_VELOCITY) {
             scheduleOnRN(dismiss);
           } else {
             translateY.value = withTiming(0, TIMING_CONFIG);
           }
-        }),
-    [translateY, dismiss]
-  );
+        }
+      });
+
+    const nativeGesture = Gesture.Native();
+
+    return Gesture.Simultaneous(panGesture, nativeGesture);
+  }, [translateY, scrollOffset, dismiss]);
 
   const handlePlayPause = (): void => {
     if (isAnimatingRef.current) return;
@@ -255,7 +268,7 @@ export function HomeOverlay(): React.ReactElement {
   };
 
   return (
-    <GestureDetector gesture={panGesture}>
+    <GestureDetector gesture={composedGesture}>
       <Animated.View
         onLayout={handleLayout}
         pointerEvents={isFullyHidden ? 'none' : 'auto'}
@@ -269,6 +282,8 @@ export function HomeOverlay(): React.ReactElement {
           contentContainerClassName="w-full items-center"
           style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
           showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         >
           <View className="h-[50vh]" style={{ marginBottom: -(LOGO_SIZE / 2 + insets.top) }} />
           <Pressable
@@ -291,7 +306,7 @@ export function HomeOverlay(): React.ReactElement {
               )}
             </View>
           </Pressable>
-          <Text className="mt-12 text-center font-heading text-lg font-bold uppercase text-white">
+          <Text className="mt-12 text-center font-heading text-xl font-bold uppercase text-white">
             More channels coming soon
           </Text>
           <Pressable
@@ -300,14 +315,14 @@ export function HomeOverlay(): React.ReactElement {
             }}
             className="active:opacity-70"
           >
-            <Text className="text-center font-heading text-lg font-bold uppercase text-white">
+            <Text className="text-center font-heading text-xl font-bold uppercase text-white">
               say,{' '}
-              <Text className="font-heading text-lg font-bold text-white underline">
+              <Text className="font-heading text-xl font-bold text-white underline">
                 hi@nicecream.fm
               </Text>
             </Text>
           </Pressable>
-          <View className="mt-10 gap-6" style={{ width: LOGO_SIZE }}>
+          {/* <View className="mt-10 gap-6" style={{ width: LOGO_SIZE }}>
             {CHANNEL_BLOCKS.map((source, index) => (
               <Grayscale key={index}>
                 <Image
@@ -318,8 +333,8 @@ export function HomeOverlay(): React.ReactElement {
                 />
               </Grayscale>
             ))}
-          </View>
-          <View className="h-[50vh]" />
+          </View> */}
+          {/* <View className="h-[50vh]" /> */}
         </ScrollView>
       </Animated.View>
     </GestureDetector>

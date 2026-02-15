@@ -73,7 +73,7 @@ export default function ChannelRoute(): React.ReactElement {
   useEffect(() => {
     if (pendingNavigation === null) return;
     const { prev: prevChannel, next: nextChannel } = getAdjacentChannels(currentChannel);
-    router.replace(`/${pendingNavigation === 'prev' ? prevChannel : nextChannel}`);
+    router.replace(`/${pendingNavigation.direction === 'prev' ? prevChannel : nextChannel}`);
     clearPendingNavigation();
   }, [pendingNavigation, clearPendingNavigation, currentChannel, router]);
 
@@ -164,7 +164,9 @@ export default function ChannelRoute(): React.ReactElement {
   return (
     <>
       <Head>
-        <title>{env.appName} - {stream.name.toLowerCase()}</title>
+        <title>
+          {env.appName} - {stream.name.toLowerCase()}
+        </title>
         <meta
           name="description"
           content={`listen to ${stream.name.toLowerCase()} on ${env.appName}`}

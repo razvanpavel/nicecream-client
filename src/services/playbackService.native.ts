@@ -398,8 +398,7 @@ function initRealPlaybackService(): void {
       return;
     }
 
-    const channelName =
-      state.currentStreamName.charAt(0).toUpperCase() + state.currentStreamName.slice(1);
+    const channelName = state.currentStreamName;
     const trackTitle = state.streamMetadata.title ?? '';
     const trackArtist = state.streamMetadata.artist ?? '';
 

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { getDefaultStreamIndex } from '@/config/streams';
+
 export type ChannelId = 'red' | 'green' | 'blue';
 
 interface AppState {
@@ -9,7 +11,7 @@ interface AppState {
   isHomeVisible: boolean;
   hasHomeDismissed: boolean;
   isHomeFullyHidden: boolean;
-  pendingNavigation: 'prev' | 'next' | null;
+  pendingNavigation: { direction: 'prev' | 'next'; seq: number } | null;
 
   // Actions
   setCurrentStreamIndex: (index: number) => void;
@@ -22,7 +24,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  currentStreamIndex: 1, // Default to green (center)
+  currentStreamIndex: getDefaultStreamIndex(),
   isPlayerSetup: false,
   isOffline: false,
   isHomeVisible: true,
@@ -55,7 +57,12 @@ export const useAppStore = create<AppState>((set) => ({
   },
 
   navigateChannel: (direction): void => {
-    set({ pendingNavigation: direction });
+    set((state) => ({
+      pendingNavigation: {
+        direction,
+        seq: (state.pendingNavigation?.seq ?? 0) + 1,
+      },
+    }));
   },
 
   clearPendingNavigation: (): void => {

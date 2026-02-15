@@ -114,10 +114,12 @@ export function SwipePager(): React.ReactElement {
   const [activePage, setActivePage] = useState(initialPage);
   // Shared value for gesture-driven crossfade logo animation
   const scrollPosition = useSharedValue(initialPage);
-  // Track programmatic jumps to avoid duplicate stream switches
-  const isJumpingRef = useRef(false);
+  // Track programmatic jumps — stores expected landing page (null = no jump in progress)
+  const jumpTargetRef = useRef<number | null>(null);
   // Track current page for navigation
   const currentPageRef = useRef(initialPage);
+  // Track intended stream index (0-2) for rapid button presses
+  const targetStreamIndexRef = useRef(pageToStreamIndex(initialPage));
 
   // Trigger haptic when swipe starts settling (before animation completes)
   const handlePageScrollStateChanged = useCallback(
@@ -125,7 +127,7 @@ export function SwipePager(): React.ReactElement {
       const state = event.nativeEvent.pageScrollState;
 
       // 'settling' = user lifted finger, animation starting
-      if (state === 'settling' && !isJumpingRef.current) {
+      if (state === 'settling' && jumpTargetRef.current === null) {
         void haptics.medium();
       }
     },
@@ -145,10 +147,16 @@ export function SwipePager(): React.ReactElement {
       currentPageRef.current = position;
 
       // If this event is from a programmatic jump (setPageWithoutAnimation),
-      // we've already handled the stream switch - just update refs and return
-      if (isJumpingRef.current) {
-        isJumpingRef.current = false;
-        return;
+      // check whether it matches the expected landing page
+      if (jumpTargetRef.current !== null) {
+        if (position === jumpTargetRef.current) {
+          // Expected jump landing — swallow it
+          jumpTargetRef.current = null;
+          return;
+        }
+        // Position doesn't match — button press redirected the pager mid-jump.
+        // Clear the flag and fall through to normal handling.
+        jumpTargetRef.current = null;
       }
 
       // Determine the effective stream position
@@ -172,6 +180,7 @@ export function SwipePager(): React.ReactElement {
       // Sync stream index for logo (always based on effective position)
       const streamIndex = pageToStreamIndex(effectivePosition);
       setCurrentStreamIndex(streamIndex);
+      targetStreamIndexRef.current = streamIndex;
 
       // Switch stream - audioStore handles cancellation internally
       const { status } = useAudioStore.getState();
@@ -183,7 +192,7 @@ export function SwipePager(): React.ReactElement {
 
       // Perform the visual jump AFTER initiating stream switch
       if (needsJump) {
-        isJumpingRef.current = true;
+        jumpTargetRef.current = effectivePosition;
         scrollPosition.value = effectivePosition;
         pagerRef.current?.setPageWithoutAnimation(effectivePosition);
         currentPageRef.current = effectivePosition;
@@ -199,14 +208,24 @@ export function SwipePager(): React.ReactElement {
   useEffect(() => {
     if (pendingNavigation === null) return;
 
-    if (pendingNavigation === 'prev') {
-      const prevPage = currentPageRef.current - 1;
-      pagerRef.current?.setPage(Math.max(0, prevPage));
-    } else {
-      const nextPage = currentPageRef.current + 1;
-      pagerRef.current?.setPage(Math.min(INFINITE_PAGES.length - 1, nextPage));
+    const currentTarget = targetStreamIndexRef.current;
+    const nextStreamIndex =
+      pendingNavigation.direction === 'next'
+        ? (currentTarget + 1) % STREAMS.length
+        : (currentTarget - 1 + STREAMS.length) % STREAMS.length;
+
+    targetStreamIndexRef.current = nextStreamIndex;
+
+    // Default: map stream index to real page — Red(0)→1, Green(1)→2, Blue(2)→3
+    // For wrap-around, use boundary pages so the animation goes the correct direction
+    let targetPage = nextStreamIndex + 1;
+    if (pendingNavigation.direction === 'next' && nextStreamIndex < currentTarget) {
+      targetPage = INFINITE_PAGES.length - 1; // page 4 (fake Red) — forward wrap
+    } else if (pendingNavigation.direction === 'prev' && nextStreamIndex > currentTarget) {
+      targetPage = 0; // page 0 (fake Blue) — backward wrap
     }
 
+    pagerRef.current?.setPage(targetPage);
     clearPendingNavigation();
   }, [pendingNavigation, clearPendingNavigation]);
 
@@ -215,7 +234,8 @@ export function SwipePager(): React.ReactElement {
     const currentPageStreamIndex = pageToStreamIndex(currentPageRef.current);
     if (currentStreamIndex !== currentPageStreamIndex) {
       const targetPage = currentStreamIndex + 1; // Red(0)→1, Green(1)→2, Blue(2)→3
-      isJumpingRef.current = true;
+      jumpTargetRef.current = targetPage;
+      targetStreamIndexRef.current = currentStreamIndex;
       scrollPosition.value = targetPage;
       pagerRef.current?.setPageWithoutAnimation(targetPage);
       currentPageRef.current = targetPage;
@@ -237,7 +257,15 @@ export function SwipePager(): React.ReactElement {
       >
         {INFINITE_PAGES.map((stream, index) => (
           <View key={`${stream.id}-${String(index)}`} className="flex-1">
-            <ChannelScreen stream={stream} isActive={index === activePage} showLogo={false} />
+            <ChannelScreen
+              stream={stream}
+              isActive={
+                index === activePage ||
+                (index === 0 && activePage === 3) || // fake Blue mirrors real Blue
+                (index === 4 && activePage === 1) // fake Red mirrors real Red
+              }
+              showLogo={false}
+            />
           </View>
         ))}
       </PagerView>
