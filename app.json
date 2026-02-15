@@ -2,21 +2,31 @@
   "expo": {
     "name": "nicecream.fm",
     "slug": "nicecream-fm",
-    "version": "1.0.2",
+    "version": "2.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "nicecream",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "fm.nicecream.app",
-      "appleTeamId": "Y26P6FJZS5",
+      "bundleIdentifier": "fm.nicecream.app.ios",
+      "appleTeamId": "3AYF9Y942Q",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
+        "UIBackgroundModes": [
+          "audio"
+        ],
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["spotify", "music", "youtube", "vnd.youtube.music"]
+        "LSApplicationQueriesSchemes": [
+          "spotify",
+          "music",
+          "youtube",
+          "vnd.youtube.music"
+        ]
       },
-      "associatedDomains": ["applinks:nicecream.fm", "applinks:www.nicecream.fm"]
+      "associatedDomains": [
+        "applinks:nicecream.fm",
+        "applinks:www.nicecream.fm"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -47,7 +57,10 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -91,6 +104,6 @@
     "updates": {
       "url": "https://u.expo.dev/6a144976-a293-4158-9693-9be5e86e8f51"
     },
-    "owner": "sfpavel"
+    "owner": "nicecream.fm"
   }
 }
