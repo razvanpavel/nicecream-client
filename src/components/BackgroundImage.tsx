@@ -1,6 +1,6 @@
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, AppState, type AppStateStatus, Platform, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, type AppStateStatus, Platform, StyleSheet, View } from 'react-native';
 
 import { CHANNEL_BACKGROUNDS } from '@/config/backgrounds';
 import type { ChannelId } from '@/store/appStore';
@@ -59,11 +59,6 @@ function BackgroundVideo({ channel, effectiveActive }: BackgroundVideoProps): Re
     player.audioMixingMode = 'mixWithOthers';
   });
 
-  // Black overlay that fades OUT (1→0) to reveal the video underneath.
-  // Native video views render on a separate layer that bypasses parent opacity,
-  // so we use an overlay on top instead of wrapping VideoView in Animated.View.
-  const overlayOpacity = useRef(new Animated.Value(1)).current;
-
   // Track app foreground state so videos pause when backgrounded
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   // Cooldown for error recovery to prevent infinite retry loops
@@ -75,29 +70,14 @@ function BackgroundVideo({ channel, effectiveActive }: BackgroundVideoProps): Re
     isActiveRef.current = effectiveActive;
   }, [effectiveActive]);
 
-  /** Animate the black overlay away to reveal the video. */
-  const fadeIn = useCallback((): void => {
-    Animated.timing(overlayOpacity, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start();
-  }, [overlayOpacity]);
-
   // Play/pause based on isActive changes
   useEffect(() => {
     if (effectiveActive && appStateRef.current === 'active') {
       ensurePlaying(player, channel);
-      // If the player is already readyToPlay (e.g. swipe-back, bottom nav),
-      // no statusChange will fire — trigger fade immediately.
-      if (player.status === 'readyToPlay') {
-        fadeIn();
-      }
     } else {
       player.pause();
-      overlayOpacity.setValue(1);
     }
-  }, [effectiveActive, player, channel, overlayOpacity, fadeIn]);
+  }, [effectiveActive, player, channel]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -140,7 +120,7 @@ function BackgroundVideo({ channel, effectiveActive }: BackgroundVideoProps): Re
     };
   }, [player, channel]);
 
-  // Status change listener: auto-play when ready, fade in, recover from errors
+  // Status change listener: auto-play when ready, recover from errors
   useEffect(() => {
     const statusSubscription = player.addListener('statusChange', (newStatus) => {
       if (!isActiveRef.current) return;
@@ -150,13 +130,11 @@ function BackgroundVideo({ channel, effectiveActive }: BackgroundVideoProps): Re
         if (Platform.OS !== 'web') {
           player.play();
         }
-        fadeIn();
         return;
       }
 
       if (newStatus.status === 'error') {
         console.warn(`[BackgroundImage] ${channel} video error, attempting recovery`);
-        overlayOpacity.setValue(1);
 
         const now = Date.now();
         if (now - lastRecoveryRef.current < ERROR_RECOVERY_COOLDOWN_MS) return;
@@ -169,7 +147,7 @@ function BackgroundVideo({ channel, effectiveActive }: BackgroundVideoProps): Re
     return (): void => {
       statusSubscription.remove();
     };
-  }, [player, channel, overlayOpacity, fadeIn]);
+  }, [player, channel]);
 
   return (
     <View style={styles.container} pointerEvents="none">
@@ -181,7 +159,6 @@ function BackgroundVideo({ channel, effectiveActive }: BackgroundVideoProps): Re
         allowsVideoFrameAnalysis={false}
         allowsPictureInPicture={false}
       />
-      <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]} />
     </View>
   );
 }
@@ -199,9 +176,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
     height: '100%',
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#141414',
   },
 });
