@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import { getDefaultStreamIndex } from '@/config/streams';
@@ -24,7 +25,9 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  currentStreamIndex: getDefaultStreamIndex(),
+  // On web, use a fixed default to avoid hydration mismatch (build time ≠ client time).
+  // The channel route updates this via setCurrentStreamIndex on mount.
+  currentStreamIndex: Platform.OS === 'web' ? 0 : getDefaultStreamIndex(),
   isPlayerSetup: false,
   isOffline: false,
   isHomeVisible: true,
