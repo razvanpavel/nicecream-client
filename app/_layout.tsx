@@ -6,7 +6,7 @@ import 'expo-insights';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { LogBox, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
@@ -118,7 +118,15 @@ export default function RootLayout(): React.ReactElement | null {
     }
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) {
+  // On web, skip SSG rendering to avoid React 19 hydration mismatches from
+  // components without SSR support (expo-video, lottie-react, reanimated).
+  // SEO meta tags are served from +html.tsx regardless.
+  const [isHydrated, setIsHydrated] = useState(Platform.OS !== 'web');
+  useEffect(() => {
+    if (Platform.OS === 'web') setIsHydrated(true);
+  }, []);
+
+  if (!fontsLoaded || !isHydrated) {
     return null;
   }
 

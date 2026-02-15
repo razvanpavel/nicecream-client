@@ -17,7 +17,16 @@ import { cn } from '@/utils/cn';
 import { openMusicSearch, type MusicService } from '@/utils/musicSearch';
 
 import { ActionSheet, type ActionSheetOption } from './ActionSheet';
-import { CloseIcon, HeartIcon, MenuIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons';
+import {
+  CloseIcon,
+  HeartIcon,
+  HqBadge,
+  MenuIcon,
+  NextIcon,
+  PauseIcon,
+  PlayIcon,
+  PrevIcon,
+} from './icons';
 import { Loader } from './Loader';
 import { Text } from './ui';
 
@@ -193,17 +202,21 @@ export function BottomNavigation(): React.ReactElement {
 
       {/* Playback Controls */}
       <View className="flex-row items-center justify-center gap-6">
-        {/* Heart/Favorite Button */}
+        {/* Heart/Favorite Button or HQ Badge */}
         <Animated.View style={animatedNavStyle} pointerEvents={hideNav ? 'none' : 'auto'}>
           <Pressable
             onPress={handleHeartPress}
             disabled={!hasTrackInfo || hideNav}
             className={cn(
-              'h-16 w-16 items-center justify-center active:opacity-70',
-              !hasTrackInfo ? 'opacity-40' : ''
+              'h-16 w-16 items-center justify-center',
+              hasTrackInfo && 'active:opacity-70'
             )}
           >
-            <HeartIcon size={56} color="white" />
+            {hasTrackInfo ? (
+              <HeartIcon size={56} color="white" />
+            ) : (
+              <HqBadge width={44} color="white" />
+            )}
           </Pressable>
         </Animated.View>
 
