@@ -2,7 +2,7 @@
   "expo": {
     "name": "nicecream.fm",
     "slug": "nicecream-fm",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "nicecream",
